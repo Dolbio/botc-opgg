@@ -3,11 +3,11 @@ import { Search, TrendingUp, Users, Award, Skull, Heart, ChevronDown, ChevronUp,
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 const ROLE_CATEGORIES = {
-  Info: ['Washerwoman','Librarian','Investigator','Chef','Empath','Fortune Teller','Undertaker','Ravenkeeper','Flowergirl','Town Crier','Oracle','Seamstress','Mathematician','Clockmaker','Dreamer','Balloonist','Juggler','Savant','Artist','Bounty Hunter','Poppy Grower','Gossip','General','Chambermaid','Pixie','Amnesiac','King','Shugenja','Sage','Village Idiot','Fisherman','Vizier','Alchemist','Cannibal','Huntsman'],
-  Schutz: ['Monk','Sailor','Innkeeper','Grandmother','Minstrel','Tea Lady','Pacifist','Exorcist','Courtier','Fool','Soldier','Lycanthrope','Nightwatchman','Professor','Bodyguard','Noble','Farmer','Acrobat'],
-  Aktiv: ['Slayer','Virgin','Mayor','Golem','Tinker','Gunslinger','Banshee','High Priestess','Magician','Puzzlemaster'],
-  Aussenseiter: ['Drunk','Recluse','Saint','Butler','Lunatic','Mutant','Barber','Moonchild','Goon','Damsel','Plague Doctor','Snitch','Politician','Zealot','Sweetheart','Klutz'],
-  Minion: ['Poisoner','Spy','Scarlet Woman','Baron','Godfather','Assassin','Mastermind','Evil Twin','Witch','Cerenovus','Pit-Hag','Mezepheles','Psychopath','Organ Grinder','Marionette','Harpy','Fearmonger','Summoner'],
+  Info: ['Washerwoman','Librarian','Investigator','Chef','Empath','Fortune Teller','Undertaker','Ravenkeeper','Flowergirl','Town Crier','Oracle','Seamstress','Mathematician','Clockmaker','Dreamer','Balloonist','Juggler','Savant','Artist','Bounty Hunter','Poppy Grower','Gossip','General','Chambermaid','Pixie','Amnesiac','King','Shugenja','Sage','Village Idiot','Fisherman','Vizier','Alchemist','Cannibal','Huntsman','Grandmother','Gambler','Snake Charmer','Philosopher'],
+  Schutz: ['Monk','Sailor','Innkeeper','Minstrel','Tea Lady','Pacifist','Fool','Soldier','Lycanthrope','Nightwatchman','Professor','Bodyguard','Noble','Farmer','Acrobat','Mayor'],
+  Aktiv: ['Slayer','Virgin','Golem','Gunslinger','Banshee','High Priestess','Magician','Puzzlemaster','Exorcist','Courtier'],
+  Aussenseiter: ['Drunk','Recluse','Saint','Butler','Lunatic','Mutant','Barber','Moonchild','Goon','Damsel','Plague Doctor','Snitch','Politician','Zealot','Sweetheart','Klutz','Tinker'],
+  Minion: ['Poisoner','Spy','Scarlet Woman','Baron','Godfather','Assassin','Mastermind','Evil Twin','Witch','Cerenovus','Pit-Hag','Mezepheles','Psychopath','Organ Grinder','Marionette','Harpy','Fearmonger','Summoner',"Devil's Advocate"],
   Daemon: ['Imp','Zombuul','Pukka','Shabaloth','Po','Vigormortis','No Dashii','Vortox','Fang Gu','Al-Hadikhia','Leviathan','Ojo','Kazali','Yaggababble','Lleech'],
 };
 
@@ -21,9 +21,16 @@ const CATEGORY_DISPLAY = {
   Sonstige:     { label: 'Sonstige',     color: '#9ca3af', emoji: '❓' },
 };
 
+const normalizeRoleName = (s) =>
+  s.toLowerCase()
+   .replace(/['‘’ʼ`´′`]/g, '')
+   .replace(/\s+/g, ' ')
+   .trim();
+
 const getRoleCategory = (role) => {
+  const norm = normalizeRoleName(role);
   for (const [cat, roles] of Object.entries(ROLE_CATEGORIES)) {
-    if (roles.some(r => r.toLowerCase() === role.toLowerCase())) return cat;
+    if (roles.some(r => normalizeRoleName(r) === norm)) return cat;
   }
   return 'Sonstige';
 };
@@ -54,7 +61,27 @@ const BotCStatsTracker = () => {
   const [lbScript, setLbScript] = useState('all');
   const [lbSearch, setLbSearch] = useState('');
   const [lbTeamFilter, setLbTeamFilter] = useState('all'); // 'all' | 'good' | 'evil'
-  const [lbMinGames, setLbMinGames] = useState(1);
+  const [lbMinGames, setLbMinGames] = useState(5);
+  const [hofSeason, setHofSeason] = useState('all'); // Hall of Fame year filter
+  const [hofMinGames, setHofMinGames] = useState(5);
+  const [hofView, setHofView] = useState('scripts'); // 'scripts' | 'categories'
+  // Rollen-Stats page
+  const [rsScript, setRsScript] = useState('all');
+  const [rsSeason, setRsSeason] = useState('all');
+  const [rsTeam, setRsTeam] = useState('all');    // all | good | evil
+  const [rsSort, setRsSort] = useState('games');   // games | winrate | name
+  const [rsSortDir, setRsSortDir] = useState('desc');
+  const [rsSearch, setRsSearch] = useState('');
+  const [rsCategory, setRsCategory] = useState('all');
+  const [rsMinGames, setRsMinGames] = useState(1);
+  // Rollen-Ranking page
+  const [rrMode, setRrMode] = useState('role');        // 'role' | 'category'
+  const [rrSelected, setRrSelected] = useState(null);  // selected role or category key
+  const [rrSeason, setRrSeason] = useState('all');
+  const [rrScript, setRrScript] = useState('all');
+  const [rrMinGames, setRrMinGames] = useState(1);
+  const [rrSort, setRrSort] = useState('winrate');
+  const [rrSortDir, setRrSortDir] = useState('desc');
 
   const demoMatches = [
     { id: 1, date: '2025-01-20', season: '2025', script: 'Trouble Brewing', storyteller: 'ClockMaster',
@@ -334,6 +361,40 @@ const BotCStatsTracker = () => {
   }, [selectedSeason, selectedScript]);
 
   // Leaderboard data computation
+
+  const calcStreaks = (playerName, filterSeason = 'all', filterScript = 'all') => {
+    const allMatches = getAllMatches();
+    // Get all played matches for this player, sorted oldest → newest
+    let ms = allMatches
+      .filter(m => m.players.some(p => p.name === playerName))
+      .filter(m => filterSeason === 'all' || (m.date ? m.date.substring(0,4) : m.season) === filterSeason)
+      .filter(m => filterScript === 'all' || m.script === filterScript)
+      .map(m => {
+        const p = m.players.find(x => x.name === playerName);
+        return p ? { result: p.result, team: p.team, date: m.date } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    let maxWin = 0, maxLose = 0, maxGood = 0, maxEvil = 0;
+    let curWin = 0, curLose = 0, curGood = 0, curEvil = 0;
+
+    ms.forEach(m => {
+      // Win/lose streaks
+      if (m.result === 'Sieg') { curWin++; curLose = 0; }
+      else { curLose++; curWin = 0; }
+      maxWin  = Math.max(maxWin,  curWin);
+      maxLose = Math.max(maxLose, curLose);
+      // Team streaks
+      if (m.team === 'Gut')  { curGood++; curEvil = 0; }
+      else                   { curEvil++; curGood = 0; }
+      maxGood = Math.max(maxGood, curGood);
+      maxEvil = Math.max(maxEvil, curEvil);
+    });
+
+    return { maxWin, maxLose, maxGood, maxEvil };
+  };
+
   const getLeaderboardData = () => {
     return availablePlayers.map(player => ({
       ...player,
@@ -352,6 +413,156 @@ const BotCStatsTracker = () => {
       };
       const av = getVal(a), bv = getVal(b);
       return lbSortDir === 'desc' ? bv - av : av - bv;
+    });
+  };
+
+
+  const getRolesData = () => {
+    const allMatches = getAllMatches();
+    let filtered = allMatches;
+    if (rsSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rsSeason);
+    if (rsScript !== 'all') filtered = filtered.filter(m => m.script === rsScript);
+
+    const roleMap = {};
+    filtered.forEach(match => {
+      match.players.forEach(p => {
+        if (rsTeam === 'good' && p.team !== 'Gut') return;
+        if (rsTeam === 'evil' && p.team !== 'Böse') return;
+        const key = p.role;
+        if (!roleMap[key]) roleMap[key] = {
+          role: key,
+          category: getRoleCategory(key),
+          team: p.team,
+          games: 0, wins: 0,
+          players: new Set(),
+        };
+        roleMap[key].games++;
+        if (p.result === 'Sieg') roleMap[key].wins++;
+        roleMap[key].players.add(p.name);
+      });
+    });
+
+    let rows = Object.values(roleMap).map(r => ({
+      ...r,
+      players: r.players.size,
+      winrate: r.games > 0 ? parseFloat(((r.wins / r.games) * 100).toFixed(1)) : 0,
+      losses: r.games - r.wins,
+    }));
+
+    if (rsSearch) rows = rows.filter(r => r.role.toLowerCase().includes(rsSearch.toLowerCase()));
+    rows = rows.filter(r => r.games >= rsMinGames);
+    if (rsCategory !== 'all') {
+      const catKey = Object.keys(CATEGORY_DISPLAY).find(k => CATEGORY_DISPLAY[k].label === rsCategory);
+      rows = rows.filter(r => r.category === catKey);
+    }
+
+    rows.sort((a, b) => {
+      let av = a[rsSort] ?? 0, bv = b[rsSort] ?? 0;
+      if (rsSort === 'name') { av = a.role; bv = b.role; return rsSortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av); }
+      return rsSortDir === 'desc' ? bv - av : av - bv;
+    });
+    return rows;
+  };
+
+
+  const getRoleRankingData = () => {
+    const allMatches = getAllMatches();
+    let filtered = allMatches;
+    if (rrSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rrSeason);
+    if (rrScript !== 'all') filtered = filtered.filter(m => m.script === rrScript);
+
+    // Build list of all unique roles and categories from filtered matches
+    const rolesSet = new Set();
+    filtered.forEach(m => m.players.forEach(p => rolesSet.add(p.role)));
+    const allRoles = Array.from(rolesSet).sort();
+
+    // Per-player stats for the selected role or category
+    const playerMap = {};
+    filtered.forEach(match => {
+      match.players.forEach(p => {
+        const matchesCriteria = rrMode === 'role'
+          ? rrSelected && p.role === rrSelected
+          : rrSelected && getRoleCategory(p.role) === rrSelected;
+        if (!matchesCriteria) return;
+        if (!playerMap[p.name]) playerMap[p.name] = { name: p.name, games: 0, wins: 0, roles: new Set() };
+        playerMap[p.name].games++;
+        if (p.result === 'Sieg') playerMap[p.name].wins++;
+        playerMap[p.name].roles.add(p.role);
+      });
+    });
+
+    let rows = Object.values(playerMap)
+      .filter(p => p.games >= rrMinGames)
+      .map(p => ({
+        ...p,
+        roles: Array.from(p.roles).sort().join(', '),
+        losses: p.games - p.wins,
+        winrate: p.games > 0 ? parseFloat(((p.wins / p.games) * 100).toFixed(1)) : 0,
+      }));
+
+    rows.sort((a, b) => {
+      const av = a[rrSort] ?? 0, bv = b[rrSort] ?? 0;
+      return rrSortDir === 'desc' ? bv - av : av - bv;
+    });
+
+    return { rows, allRoles };
+  };
+
+
+  const getHallOfFameData = () => {
+    const allMatches = getAllMatches();
+    const filtered = hofSeason === 'all'
+      ? allMatches
+      : allMatches.filter(m => (m.date ? m.date.substring(0, 4) : m.season) === hofSeason);
+
+    const scripts = ['__all__', ...Array.from(new Set(filtered.map(m => m.script))).sort()];
+
+    return scripts.map(script => {
+      const scriptMatches = script === '__all__' ? filtered : filtered.filter(m => m.script === script);
+
+      // Per-player stats for this script group
+      const playerMap = {};
+      scriptMatches.forEach(match => {
+        match.players.forEach(p => {
+          if (!playerMap[p.name]) playerMap[p.name] = { name: p.name, wins: 0, total: 0 };
+          playerMap[p.name].total++;
+          if (p.result === 'Sieg') playerMap[p.name].wins++;
+        });
+      });
+
+      const ranked = Object.values(playerMap)
+        .filter(p => p.total >= hofMinGames)
+        .map(p => ({ ...p, winrate: parseFloat(((p.wins / p.total) * 100).toFixed(1)) }))
+        .sort((a, b) => b.winrate - a.winrate || b.total - a.total)
+        .slice(0, 3);
+
+      return { script, label: script === '__all__' ? 'Alle Scripts' : script, top3: ranked };
+    });
+  };
+
+
+  const getHallOfFameCategoryData = () => {
+    const allMatches = getAllMatches();
+    const filtered = hofSeason === 'all'
+      ? allMatches
+      : allMatches.filter(m => (m.date ? m.date.substring(0, 4) : m.season) === hofSeason);
+
+    return Object.entries(CATEGORY_DISPLAY).map(([catKey, cfg]) => {
+      const playerMap = {};
+      filtered.forEach(match => {
+        match.players.forEach(p => {
+          if (getRoleCategory(p.role) !== catKey) return;
+          if (!playerMap[p.name]) playerMap[p.name] = { name: p.name, wins: 0, total: 0 };
+          playerMap[p.name].total++;
+          if (p.result === 'Sieg') playerMap[p.name].wins++;
+        });
+      });
+      const top3 = Object.values(playerMap)
+        .filter(p => p.total >= hofMinGames)
+        .map(p => ({ ...p, winrate: parseFloat(((p.wins / p.total) * 100).toFixed(1)) }))
+        .sort((a, b) => b.winrate - a.winrate || b.total - a.total)
+        .slice(0, 3);
+      return { catKey, label: cfg.label, emoji: cfg.emoji, color: cfg.color, top3 };
     });
   };
 
@@ -462,6 +673,24 @@ const BotCStatsTracker = () => {
             className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'leaderboard' ? 'bg-gray-800 text-purple-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
           >
             <LayoutGrid size={16} />Spieler-Übersicht
+          </button>
+          <button
+            onClick={() => setActivePage('hof')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'hof' ? 'bg-gray-800 text-yellow-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Trophy size={16} />Hall of Fame
+          </button>
+          <button
+            onClick={() => setActivePage('roles')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'roles' ? 'bg-gray-800 text-green-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Users size={16} />Rollen-Stats
+          </button>
+          <button
+            onClick={() => setActivePage('roleranking')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'roleranking' ? 'bg-gray-800 text-orange-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Award size={16} />Rollen-Ranking
           </button>
         </div>
 
@@ -640,23 +869,691 @@ const BotCStatsTracker = () => {
             </div>
 
             {/* Summary Cards */}
-            {leaderboardData.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-                {[
-                  { label: 'Höchste Winrate', icon: <Award size={20} className="text-yellow-400" />, val: `${leaderboardData.sort((a,b)=>b.winrate-a.winrate)[0]?.name}: ${leaderboardData[0]?.winrate}%`, color: 'yellow' },
-                  { label: 'Meiste Spiele', icon: <TrendingUp size={20} className="text-purple-400" />, val: `${[...leaderboardData].sort((a,b)=>b.total-a.total)[0]?.name}: ${[...leaderboardData].sort((a,b)=>b.total-a.total)[0]?.total}`, color: 'purple' },
-                  { label: 'Bester Gut-Spieler', icon: <Heart size={20} className="text-blue-400" />, val: (() => { const p = [...leaderboardData].filter(x=>x.goodGames>0).sort((a,b)=>b.goodWinrate-a.goodWinrate)[0]; return p ? `${p.name}: ${p.goodWinrate}%` : 'N/A'; })(), color: 'blue' },
-                  { label: 'Bester Böse-Spieler', icon: <Skull size={20} className="text-red-400" />, val: (() => { const p = [...leaderboardData].filter(x=>x.evilGames>0).sort((a,b)=>b.evilWinrate-a.evilWinrate)[0]; return p ? `${p.name}: ${p.evilWinrate}%` : 'N/A'; })(), color: 'red' },
-                ].map((card, i) => (
-                  <div key={i} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
-                    <div className="flex items-center gap-2 mb-2">{card.icon}<span className="text-xs text-gray-400">{card.label}</span></div>
-                    <p className="font-semibold text-sm text-white">{card.val}</p>
+            {leaderboardData.length > 0 && (() => {
+              // Compute streaks for all players in current filter
+              const withStreaks = leaderboardData.map(p => ({
+                ...p,
+                ...calcStreaks(p.name, lbSeason, lbScript),
+              }));
+
+              const best = (arr, key) => [...arr].sort((a,b) => (b[key]??0)-(a[key]??0))[0];
+
+              const topWr    = best(withStreaks, 'winrate');
+              const topGames = best(withStreaks, 'total');
+              const topGood  = withStreaks.filter(x=>x.goodGames>0).sort((a,b)=>b.goodWinrate-a.goodWinrate)[0];
+              const topEvil  = withStreaks.filter(x=>x.evilGames>0).sort((a,b)=>b.evilWinrate-a.evilWinrate)[0];
+              const topWinStreak  = best(withStreaks, 'maxWin');
+              const topLoseStreak = best(withStreaks, 'maxLose');
+              const topGoodStreak = best(withStreaks, 'maxGood');
+              const topEvilStreak = best(withStreaks, 'maxEvil');
+
+              const cards = [
+                { label: 'Höchste Winrate',      icon: <Award size={18} className="text-yellow-400" />,  val: topWr    ? `${topWr.name}: ${topWr.winrate}%`                        : 'N/A', accent: 'border-yellow-600' },
+                { label: 'Meiste Spiele',         icon: <TrendingUp size={18} className="text-purple-400" />, val: topGames ? `${topGames.name}: ${topGames.total}`                 : 'N/A', accent: 'border-purple-600' },
+                { label: 'Bester Gut-Spieler',    icon: <Heart size={18} className="text-blue-400" />,   val: topGood  ? `${topGood.name}: ${topGood.goodWinrate}%`                : 'N/A', accent: 'border-blue-600' },
+                { label: 'Bester Böse-Spieler',   icon: <Skull size={18} className="text-red-400" />,    val: topEvil  ? `${topEvil.name}: ${topEvil.evilWinrate}%`                : 'N/A', accent: 'border-red-600' },
+                { label: '🔥 Longest Win Streak',  icon: <TrendingUp size={18} className="text-green-400" />,  val: topWinStreak  ? `${topWinStreak.name}: ${topWinStreak.maxWin} in Folge`   : 'N/A', accent: 'border-green-600' },
+                { label: '💀 Longest Lose Streak', icon: <Skull size={18} className="text-orange-400" />, val: topLoseStreak ? `${topLoseStreak.name}: ${topLoseStreak.maxLose} in Folge`  : 'N/A', accent: 'border-orange-600' },
+                { label: '💙 Longest Good Streak', icon: <Heart size={18} className="text-blue-300" />,   val: topGoodStreak ? `${topGoodStreak.name}: ${topGoodStreak.maxGood} in Folge`  : 'N/A', accent: 'border-blue-400' },
+                { label: '❤️ Longest Evil Streak', icon: <Skull size={18} className="text-red-300" />,    val: topEvilStreak ? `${topEvilStreak.name}: ${topEvilStreak.maxEvil} in Folge`  : 'N/A', accent: 'border-red-400' },
+              ];
+
+              return (
+                <div className="mt-6 space-y-3">
+                  <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wide">Highlights</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {cards.map((card, i) => (
+                      <div key={i} className={`bg-gray-800 rounded-lg p-4 border border-l-4 border-gray-700 ${card.accent}`}>
+                        <div className="flex items-center gap-2 mb-1.5">{card.icon}<span className="text-xs text-gray-400">{card.label}</span></div>
+                        <p className="font-semibold text-sm text-white">{card.val}</p>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+                </div>
+              );
+            })()}
           </div>
         )}
+
+
+
+        {/* ======================== ROLES PAGE ======================== */}
+        {activePage === 'roles' && (() => {
+          const rolesData = getRolesData();
+          const years = getAvailableYears();
+          const allScriptsForRoles = getAvailableScripts();
+          // Build category list — hide Sonstige if no roles fall into it
+          const _allRolesInData = getRolesData();
+          const hasSonstige = _allRolesInData.some(r => r.category === 'Sonstige');
+          const allCategories = Object.values(CATEGORY_DISPLAY)
+            .filter(c => c.label !== 'Sonstige' || hasSonstige)
+            .map(c => c.label);
+          const handleRsSort = (key) => {
+            if (rsSort === key) setRsSortDir(d => d === 'desc' ? 'asc' : 'desc');
+            else { setRsSort(key); setRsSortDir('desc'); }
+          };
+          const RsSortIcon = ({ k }) => {
+            if (rsSort !== k) return <ArrowUpDown size={13} className="text-gray-500 ml-1 inline" />;
+            return rsSortDir === 'desc'
+              ? <ArrowDown size={13} className="text-green-400 ml-1 inline" />
+              : <ArrowUp size={13} className="text-green-400 ml-1 inline" />;
+          };
+
+          return (
+            <div>
+              {/* ── Filters ── */}
+              <div className="bg-gray-800 rounded-lg p-5 mb-6 border border-gray-700 space-y-4">
+                <div className="flex flex-wrap gap-4 items-end">
+                  {/* Search */}
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium">Rolle suchen</label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-2.5 text-gray-400" size={15} />
+                      <input type="text" placeholder="z.B. Imp..." value={rsSearch} onChange={e => setRsSearch(e.target.value)}
+                        className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-green-500" />
+                    </div>
+                  </div>
+                  {/* Team */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium">Team</label>
+                    <div className="flex gap-1">
+                      {[['all','Alle'],['good','💙 Gut'],['evil','❤️ Böse']].map(([v,l]) => (
+                        <button key={v} onClick={() => setRsTeam(v)}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${rsTeam === v ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{l}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Min games */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium">Min. Spiele</label>
+                  <div className="flex items-center gap-2">
+                    {[1, 2, 3, 5, 10].map(n => (
+                      <button key={n} onClick={() => setRsMinGames(n)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${rsMinGames === n ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        {n}+
+                      </button>
+                    ))}
+                    <input type="number" min={1} max={999} value={rsMinGames} onChange={e => setRsMinGames(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="w-16 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-green-500" />
+                  </div>
+                </div>
+
+                {/* Year pills */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Calendar size={12} />Jahr</label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setRsSeason('all')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsSeason === 'all' ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle</button>
+                    {years.map(y => (
+                      <button key={y} onClick={() => setRsSeason(y)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsSeason === y ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{y}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Script pills */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Scroll size={12} />Script</label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setRsScript('all')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsScript === 'all' ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle Scripts</button>
+                    {allScriptsForRoles.map(s => (
+                      <button key={s} onClick={() => setRsScript(s)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsScript === s ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{s}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Category pills */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium">Kategorie</label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setRsCategory('all')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsCategory === 'all' ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle</button>
+                    {allCategories.map(cat => {
+                      const cfg = Object.values(CATEGORY_DISPLAY).find(c => c.label === cat);
+                      return (
+                        <button key={cat} onClick={() => setRsCategory(cat)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsCategory === cat ? 'text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                          style={rsCategory === cat ? { backgroundColor: cfg?.color + 'cc' } : {}}>
+                          {cfg?.emoji} {cat}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-500">{rolesData.length} Rollen gefunden</p>
+              </div>
+
+              {/* ── Summary bar ── */}
+              {rolesData.length > 0 && (() => {
+                const totalGames = rolesData.reduce((s, r) => s + r.games, 0);
+                const mostPlayed = [...rolesData].sort((a,b) => b.games - a.games)[0];
+                const bestWr = [...rolesData].filter(r => r.games >= 3).sort((a,b) => b.winrate - a.winrate)[0];
+                const worstWr = [...rolesData].filter(r => r.games >= 3).sort((a,b) => a.winrate - b.winrate)[0];
+
+                // Stats for currently filtered roles (respects rsCategory)
+                const filteredWins = rolesData.reduce((s, r) => s + r.wins, 0);
+                const filteredWr = totalGames > 0 ? parseFloat(((filteredWins / totalGames) * 100).toFixed(1)) : 0;
+                const catKey = rsCategory !== 'all' ? Object.keys(CATEGORY_DISPLAY).find(k => CATEGORY_DISPLAY[k].label === rsCategory) : null;
+                const catCfg = catKey ? CATEGORY_DISPLAY[catKey] : null;
+
+                return (
+                  <div className="space-y-4 mb-6">
+                    {/* Category winrate banner */}
+                    <div className="bg-gray-800 rounded-lg border border-gray-700 p-4 flex flex-wrap items-center gap-6"
+                      style={catCfg ? {borderLeftColor: catCfg.color, borderLeftWidth: 4} : {}}>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-0.5">{catCfg ? `${catCfg.emoji} ${catCfg.label}` : 'Alle Kategorien'}</div>
+                        <div className={`text-3xl font-black ${filteredWr >= 60 ? 'text-green-400' : filteredWr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{filteredWr}%</div>
+                      </div>
+                      <div className="text-sm text-gray-300">
+                        <span className="text-green-400 font-semibold">{filteredWins}S</span>
+                        <span className="text-gray-500 mx-1">/</span>
+                        <span className="text-red-400 font-semibold">{totalGames - filteredWins}N</span>
+                        <span className="text-gray-500 ml-2">({totalGames} Spiele)</span>
+                      </div>
+                      <div className="flex-1 min-w-[120px]">
+                        <div className="w-full bg-gray-700 rounded-full h-2">
+                          <div className="h-2 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" style={{width: `${filteredWr}%`}} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {[
+                        { icon: <TrendingUp size={18} className="text-purple-400"/>, label: 'Spiele gesamt', val: totalGames },
+                        { icon: <Users size={18} className="text-blue-400"/>, label: 'Meist gespielt', val: mostPlayed ? `${mostPlayed.role} (${mostPlayed.games}×)` : '—' },
+                        { icon: <Award size={18} className="text-green-400"/>, label: 'Höchste WR (3+ Sp.)', val: bestWr ? `${bestWr.role}: ${bestWr.winrate}%` : '—' },
+                        { icon: <Skull size={18} className="text-red-400"/>, label: 'Niedrigste WR (3+ Sp.)', val: worstWr ? `${worstWr.role}: ${worstWr.winrate}%` : '—' },
+                      ].map((c,i) => (
+                        <div key={i} className="bg-gray-800 rounded-lg p-3 border border-gray-700 flex items-start gap-3">
+                          <div className="mt-0.5">{c.icon}</div>
+                          <div>
+                            <div className="text-xs text-gray-400 mb-0.5">{c.label}</div>
+                            <div className="font-semibold text-sm text-white">{c.val}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── Table ── */}
+              <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-900 border-b border-gray-700">
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">
+                          <button className="flex items-center hover:text-white" onClick={() => handleRsSort('name')}>Rolle <RsSortIcon k="name" /></button>
+                        </th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Kategorie</th>
+                        <th className="text-left py-3 px-4 text-gray-400 font-medium">Team</th>
+                        <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                          <button className="flex items-center mx-auto hover:text-white" onClick={() => handleRsSort('games')}>Gespielt <RsSortIcon k="games" /></button>
+                        </th>
+                        <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                          <button className="flex items-center mx-auto hover:text-white" onClick={() => handleRsSort('wins')}>Siege <RsSortIcon k="wins" /></button>
+                        </th>
+                        <th className="text-center py-3 px-4 text-gray-400 font-medium">Niederl.</th>
+                        <th className="text-center py-3 px-4">
+                          <button className="flex items-center mx-auto hover:text-white font-medium text-green-400" onClick={() => handleRsSort('winrate')}>
+                            <Award size={13} className="mr-1"/>Winrate <RsSortIcon k="winrate" />
+                          </button>
+                        </th>
+                        <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                          <button className="flex items-center mx-auto hover:text-white" onClick={() => handleRsSort('players')}>Spieler <RsSortIcon k="players" /></button>
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rolesData.map((row, idx) => {
+                        const catKey = Object.keys(CATEGORY_DISPLAY).find(k => k === row.category);
+                        const catCfg = catKey ? CATEGORY_DISPLAY[catKey] : CATEGORY_DISPLAY.Sonstige;
+                        return (
+                          <tr key={row.role} className={`border-b border-gray-700 transition-colors hover:bg-gray-700 ${idx % 2 === 0 ? 'bg-gray-800' : 'bg-gray-850'}`}>
+                            <td className="py-3 px-4 font-semibold text-white">{row.role}</td>
+                            <td className="py-3 px-4">
+                              <span className="text-xs px-2 py-1 rounded-full font-medium" style={{ backgroundColor: catCfg.color + '33', color: catCfg.color }}>
+                                {catCfg.emoji} {catCfg.label}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4">
+                              <span className={`text-xs px-2 py-1 rounded-full font-medium ${row.team === 'Böse' ? 'bg-red-900 bg-opacity-60 text-red-300' : 'bg-blue-900 bg-opacity-60 text-blue-300'}`}>
+                                {row.team === 'Böse' ? '❤️ Böse' : '💙 Gut'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-center font-mono">{row.games}</td>
+                            <td className="py-3 px-4 text-center font-mono text-green-400">{row.wins}</td>
+                            <td className="py-3 px-4 text-center font-mono text-red-400">{row.losses}</td>
+                            <td className="py-3 px-4 text-center">
+                              <div className="flex flex-col items-center gap-1">
+                                <span className={`font-bold ${row.winrate >= 60 ? 'text-green-400' : row.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                  {row.winrate}%
+                                </span>
+                                <div className="w-14 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                  <div className={`h-full rounded-full ${row.winrate >= 60 ? 'bg-green-500' : row.winrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                    style={{ width: `${row.winrate}%` }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 text-center text-gray-300 font-mono">{row.players}</td>
+                          </tr>
+                        );
+                      })}
+                      {rolesData.length === 0 && (
+                        <tr><td colSpan={8} className="py-12 text-center text-gray-400">Keine Rollen gefunden.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+
+        {/* ======================== ROLLEN-RANKING PAGE ======================== */}
+        {activePage === 'roleranking' && (() => {
+          const { rows, allRoles } = getRoleRankingData();
+          const years = getAvailableYears();
+          const allScriptsRR = getAvailableScripts();
+          const medals = ['🥇','🥈','🥉'];
+
+          const handleRrSort = (key) => {
+            if (rrSort === key) setRrSortDir(d => d === 'desc' ? 'asc' : 'desc');
+            else { setRrSort(key); setRrSortDir('desc'); }
+          };
+          const RrSortIcon = ({ k }) => {
+            if (rrSort !== k) return <ArrowUpDown size={13} className="text-gray-500 ml-1 inline" />;
+            return rrSortDir === 'desc'
+              ? <ArrowDown size={13} className="text-orange-400 ml-1 inline" />
+              : <ArrowUp size={13} className="text-orange-400 ml-1 inline" />;
+          };
+
+          return (
+            <div>
+              {/* ── TOP FILTER BAR ── */}
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-5 mb-6 space-y-4">
+
+                {/* Mode toggle */}
+                <div className="flex items-center gap-4 flex-wrap">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium">Ansicht</label>
+                    <div className="flex gap-1">
+                      <button onClick={() => { setRrMode('role'); setRrSelected(null); }}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${rrMode === 'role' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        🎭 Einzelne Rolle
+                      </button>
+                      <button onClick={() => { setRrMode('category'); setRrSelected(null); }}
+                        className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${rrMode === 'category' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        🏷️ Kategorie
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Min games */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium">Min. Spiele</label>
+                    <div className="flex gap-1 items-center">
+                      {[1,2,3,5,10].map(n => (
+                        <button key={n} onClick={() => setRrMinGames(n)}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${rrMinGames === n ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                          {n}+
+                        </button>
+                      ))}
+                      <input type="number" min={1} max={999} value={rrMinGames}
+                        onChange={e => setRrMinGames(Math.max(1, parseInt(e.target.value) || 1))}
+                        className="w-16 ml-1 bg-gray-900 border border-gray-600 rounded-lg px-2 py-2 text-sm text-white focus:outline-none focus:border-orange-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Year pills */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Calendar size={12}/>Jahr</label>
+                  <div className="flex gap-2 flex-wrap">
+                    {['all', ...years].map(y => (
+                      <button key={y} onClick={() => setRrSeason(y)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rrSeason === y ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        {y === 'all' ? 'Alle Jahre' : y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Script pills */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Scroll size={12}/>Script</label>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setRrScript('all')}
+                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rrScript === 'all' ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                      Alle Scripts
+                    </button>
+                    {allScriptsRR.map(s => (
+                      <button key={s} onClick={() => setRrScript(s)}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rrScript === s ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <p className="text-xs text-gray-500">
+                  {rrSelected
+                    ? `${rows.length} Spieler mit ${rrMinGames}+ Spielen qualifiziert`
+                    : `Wähle ${rrMode === 'role' ? 'eine Rolle' : 'eine Kategorie'} aus der Liste unten`}
+                </p>
+              </div>
+
+              {/* ── MAIN LAYOUT: sidebar + content ── */}
+              <div className="flex gap-6">
+
+                {/* Sidebar: Role/Category selector */}
+                <div className="w-56 flex-shrink-0">
+                  <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden sticky top-4">
+                    <div className="px-3 py-2.5 border-b border-gray-700 text-xs text-gray-400 font-semibold uppercase tracking-wide">
+                      {rrMode === 'role' ? `${allRoles.length} Rollen` : 'Kategorien'}
+                    </div>
+                    <div className="overflow-y-auto max-h-[560px]">
+                      {rrMode === 'role' ? (
+                        allRoles.map(role => {
+                          const catKey = getRoleCategory(role);
+                          const cfg = CATEGORY_DISPLAY[catKey] || CATEGORY_DISPLAY.Sonstige;
+                          return (
+                            <button key={role} onClick={() => setRrSelected(role)}
+                              className={`w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2 border-b border-gray-700 last:border-0 ${rrSelected === role ? 'bg-orange-700 bg-opacity-40 text-orange-200 font-semibold' : 'hover:bg-gray-700 text-gray-300'}`}>
+                              <span style={{color: cfg.color}} className="flex-shrink-0">{cfg.emoji}</span>
+                              <span>{role}</span>
+                            </button>
+                          );
+                        })
+                      ) : (
+                        Object.entries(CATEGORY_DISPLAY).filter(([key]) => key !== 'Sonstige' || allRoles.some(r => getRoleCategory(r) === 'Sonstige')).map(([key, cfg]) => (
+                          <button key={key} onClick={() => setRrSelected(key)}
+                            className={`w-full text-left px-3 py-2.5 text-sm transition-colors flex items-center gap-2 border-b border-gray-700 last:border-0 ${rrSelected === key ? 'bg-orange-700 bg-opacity-40 text-orange-200 font-semibold' : 'hover:bg-gray-700 text-gray-300'}`}>
+                            <span style={{color: cfg.color}} className="flex-shrink-0">{cfg.emoji}</span>
+                            <span>{cfg.label}</span>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content area */}
+                <div className="flex-1 min-w-0">
+                  {!rrSelected ? (
+                    <div className="flex items-center justify-center h-64 bg-gray-800 rounded-xl border border-gray-700 border-dashed">
+                      <div className="text-center text-gray-500">
+                        <Award size={40} className="mx-auto mb-3 opacity-40" />
+                        <p className="text-lg font-semibold">Wähle {rrMode === 'role' ? 'eine Rolle' : 'eine Kategorie'}</p>
+                        <p className="text-sm mt-1">aus der Liste links</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {/* Header card */}
+                      {(() => {
+                        const cfg = rrMode === 'category'
+                          ? (CATEGORY_DISPLAY[rrSelected] || CATEGORY_DISPLAY.Sonstige)
+                          : (CATEGORY_DISPLAY[getRoleCategory(rrSelected)] || CATEGORY_DISPLAY.Sonstige);
+                        return (
+                          <div className="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-5" style={{borderLeftColor: cfg.color, borderLeftWidth: 4}}>
+                            <div className="flex items-center gap-3 mb-3">
+                              <span className="text-4xl">{cfg.emoji}</span>
+                              <div>
+                                <h2 className="text-2xl font-bold text-white">{rrMode === 'role' ? rrSelected : cfg.label}</h2>
+                                {rrMode === 'role' && <p className="text-sm mt-0.5" style={{color: cfg.color}}>{cfg.label}</p>}
+                              </div>
+                            </div>
+                            <div className="flex flex-wrap gap-4 text-sm">
+                              <div className="bg-gray-700 rounded-lg px-3 py-2">
+                                <div className="text-xs text-gray-400 mb-0.5">Qualifizierte Spieler</div>
+                                <div className="font-bold text-white">{rows.length}</div>
+                              </div>
+                              <div className="bg-gray-700 rounded-lg px-3 py-2">
+                                <div className="text-xs text-gray-400 mb-0.5">Spiele gesamt</div>
+                                <div className="font-bold text-white">{rows.reduce((s,r) => s+r.games, 0)}</div>
+                              </div>
+                              {rows.length > 0 && (
+                                <>
+                                  <div className="bg-gray-700 rounded-lg px-3 py-2">
+                                    <div className="text-xs text-gray-400 mb-0.5">Beste Winrate</div>
+                                    <div className="font-bold text-green-400">{rows[0].name}: {rows[0].winrate}%</div>
+                                  </div>
+                                  <div className="bg-gray-700 rounded-lg px-3 py-2">
+                                    <div className="text-xs text-gray-400 mb-0.5">Meist gespielt</div>
+                                    <div className="font-bold text-blue-400">{[...rows].sort((a,b)=>b.games-a.games)[0].name}: {[...rows].sort((a,b)=>b.games-a.games)[0].games}×</div>
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Top 3 Podium */}
+                      {rows.length >= 1 && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                          {rows.slice(0,3).map((p, i) => (
+                            <div key={p.name} onClick={() => handlePlayerClick(p.name)}
+                              className={`bg-gray-800 rounded-xl p-4 cursor-pointer hover:scale-105 transition-all border ${i===0?'border-yellow-600 bg-yellow-950 bg-opacity-20':i===1?'border-gray-500':'border-amber-700 bg-amber-950 bg-opacity-10'}`}>
+                              <div className="flex items-start justify-between mb-2">
+                                <span className="text-2xl">{medals[i]}</span>
+                                <span className={`text-2xl font-black ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                              </div>
+                              <div className="font-bold text-white mb-1">👤 {p.name}</div>
+                              <div className="text-xs text-gray-400">{p.wins}S / {p.losses}N • {p.games} Spiele</div>
+                              {rrMode === 'category' && p.roles && (
+                                <div className="text-xs text-gray-500 mt-1 truncate" title={p.roles}>{p.roles}</div>
+                              )}
+                              <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
+                                <div className="h-1.5 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500" style={{width:`${p.winrate}%`}}/>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Full ranking table */}
+                      {rows.length > 0 && (
+                        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="bg-gray-900 border-b border-gray-700">
+                                <th className="text-center py-3 px-3 text-gray-400 w-10">#</th>
+                                <th className="text-left py-3 px-4 text-gray-400">Spieler</th>
+                                {rrMode === 'category' && <th className="text-left py-3 px-4 text-gray-400">Rollen</th>}
+                                <th className="text-center py-3 px-4">
+                                  <button className="flex items-center mx-auto hover:text-white text-gray-400" onClick={() => handleRrSort('games')}>Spiele<RrSortIcon k="games"/></button>
+                                </th>
+                                <th className="text-center py-3 px-4 text-green-400">
+                                  <button className="flex items-center mx-auto hover:text-white" onClick={() => handleRrSort('wins')}>Siege<RrSortIcon k="wins"/></button>
+                                </th>
+                                <th className="text-center py-3 px-4 text-red-400">Niedr.</th>
+                                <th className="text-center py-3 px-4">
+                                  <button className="flex items-center mx-auto hover:text-white text-orange-400 font-semibold" onClick={() => handleRrSort('winrate')}>
+                                    <Award size={13} className="mr-1"/>Winrate<RrSortIcon k="winrate"/>
+                                  </button>
+                                </th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {rows.map((p, idx) => (
+                                <tr key={p.name} onClick={() => handlePlayerClick(p.name)}
+                                  className={`border-b border-gray-700 cursor-pointer hover:bg-gray-700 transition-colors ${idx < 3 ? 'bg-gray-800' : idx % 2 === 0 ? 'bg-gray-800' : ''}`}>
+                                  <td className="py-3 px-3 text-center">
+                                    {idx < 3
+                                      ? <span className="text-lg">{medals[idx]}</span>
+                                      : <span className="text-gray-500 font-mono text-sm">#{idx+1}</span>}
+                                  </td>
+                                  <td className="py-3 px-4 font-semibold text-white">👤 {p.name}</td>
+                                  {rrMode === 'category' && (
+                                    <td className="py-3 px-4 text-xs text-gray-400 max-w-[180px] truncate" title={p.roles}>{p.roles}</td>
+                                  )}
+                                  <td className="py-3 px-4 text-center font-mono">{p.games}</td>
+                                  <td className="py-3 px-4 text-center font-mono text-green-400">{p.wins}</td>
+                                  <td className="py-3 px-4 text-center font-mono text-red-400">{p.losses}</td>
+                                  <td className="py-3 px-4 text-center">
+                                    <div className="flex flex-col items-center gap-1">
+                                      <span className={`font-bold ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                                      <div className="w-14 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full ${p.winrate >= 60 ? 'bg-green-500' : p.winrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                          style={{width:`${p.winrate}%`}}/>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {rows.length === 0 && (
+                        <div className="flex items-center justify-center h-40 bg-gray-800 rounded-xl border border-gray-700 border-dashed">
+                          <p className="text-gray-500">Keine Spieler mit {rrMinGames}+ Spielen gefunden.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* ======================== HALL OF FAME PAGE ======================== */}
+        {activePage === 'hof' && (() => {
+          const hofData = getHallOfFameData();
+          const hofCatData = getHallOfFameCategoryData();
+          const years = getAvailableYears();
+          const medals = ['🥇', '🥈', '🥉'];
+          const medalBg = [
+            'bg-yellow-900 bg-opacity-30 border-yellow-600',
+            'bg-gray-700 border-gray-500',
+            'bg-amber-900 bg-opacity-30 border-amber-700',
+          ];
+
+          const PodiumCard = ({ player, i, extra }) => (
+            <div
+              onClick={() => handlePlayerClick(player.name)}
+              className={`flex-1 rounded-xl border p-5 cursor-pointer hover:scale-105 transition-transform ${medalBg[i]}`}
+              style={{ flexGrow: i === 0 ? 1.4 : 1 }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <span className="text-3xl">{medals[i]}</span>
+                <div className="text-right">
+                  <div className={`text-3xl font-black ${player.winrate >= 60 ? 'text-green-400' : player.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {player.winrate}%
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">Winrate</div>
+                </div>
+              </div>
+              <div className={`font-bold text-lg mb-1 ${i === 0 ? 'text-yellow-200' : 'text-white'}`}>👤 {player.name}</div>
+              <div className="flex items-center gap-2 mt-2">
+                <span className="text-xs text-green-400 font-semibold">{player.wins}S</span>
+                <span className="text-xs text-gray-500">/</span>
+                <span className="text-xs text-red-400 font-semibold">{player.total - player.wins}N</span>
+                <span className="text-xs text-gray-500 ml-1">({player.total} Sp.)</span>
+              </div>
+              {extra && <div className="text-xs text-gray-500 mt-1">{extra}</div>}
+              <div className="w-full bg-gray-700 rounded-full h-1.5 mt-3">
+                <div className="h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" style={{ width: `${player.winrate}%` }} />
+              </div>
+            </div>
+          );
+
+          return (
+            <div>
+              {/* ── Filter bar ── */}
+              <div className="bg-gray-800 rounded-lg p-5 mb-8 border border-gray-700 space-y-4">
+                <div className="flex flex-wrap gap-6 items-end">
+                  {/* View toggle */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-2 font-medium">Ansicht</label>
+                    <div className="flex gap-1">
+                      <button onClick={() => setHofView('scripts')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${hofView === 'scripts' ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        <Scroll size={14} /> Scripts
+                      </button>
+                      <button onClick={() => setHofView('categories')}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${hofView === 'categories' ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        <Shield size={14} /> Rollen-Kategorien
+                      </button>
+                    </div>
+                  </div>
+                  {/* Year */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-2 font-medium flex items-center gap-1"><Calendar size={12}/>Saison</label>
+                    <div className="flex gap-2">
+                      {['all', ...years].map(y => (
+                        <button key={y} onClick={() => setHofSeason(y)}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${hofSeason === y ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                          {y === 'all' ? 'All Time' : y}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Min games */}
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-2 font-medium">Min. Spiele (Qualifikation)</label>
+                    <div className="flex gap-2">
+                      {[5, 10, 15, 20].map(n => (
+                        <button key={n} onClick={() => setHofMinGames(n)}
+                          className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${hofMinGames === n ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                          {n}+
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── SCRIPTS VIEW ── */}
+              {hofView === 'scripts' && hofData.map(({ script, label, top3 }) => (
+                <div key={script} className={`mb-8 rounded-xl border ${script === '__all__' ? 'border-yellow-600 bg-gradient-to-br from-yellow-950 via-gray-900 to-gray-900' : 'border-gray-700 bg-gray-800'} overflow-hidden`}>
+                  <div className={`px-6 py-4 flex items-center gap-3 ${script === '__all__' ? 'border-b border-yellow-700' : 'border-b border-gray-700'}`}>
+                    {script === '__all__' ? <Crown size={22} className="text-yellow-400" /> : <Scroll size={20} className="text-purple-400" />}
+                    <h2 className={`text-xl font-bold ${script === '__all__' ? 'text-yellow-400' : 'text-white'}`}>{label}</h2>
+                    {top3.length === 0 && <span className="ml-auto text-sm text-gray-500">Noch keine {hofMinGames}+ Qualifizierer</span>}
+                  </div>
+                  {top3.length > 0 && (
+                    <div className="p-6">
+                      <div className="flex flex-col md:flex-row gap-4">
+                        {top3.map((player, i) => <PodiumCard key={player.name} player={player} i={i} />)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+
+              {/* ── CATEGORIES VIEW ── */}
+              {hofView === 'categories' && (
+                <div>
+                  {/* Per category */}
+                  {hofCatData.filter(({ catKey, top3 }) => catKey !== 'Sonstige' || top3.length > 0).map(({ catKey, label, emoji, color, top3 }) => (
+                    <div key={catKey} className="mb-8 rounded-xl border border-gray-700 bg-gray-800 overflow-hidden">
+                      <div className="px-6 py-4 flex items-center gap-3 border-b border-gray-700" style={{borderLeftColor: color, borderLeftWidth: 4}}>
+                        <span className="text-2xl">{emoji}</span>
+                        <h2 className="text-xl font-bold text-white">{label}</h2>
+                        {top3.length === 0 && <span className="ml-auto text-sm text-gray-500">Noch keine {hofMinGames}+ Qualifizierer</span>}
+                      </div>
+                      {top3.length > 0 && (
+                        <div className="p-6">
+                          <div className="flex flex-col md:flex-row gap-4">
+                            {top3.map((player, i) => <PodiumCard key={player.name} player={player} i={i} />)}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* ======================== PLAYER DETAIL PAGE ======================== */}
         {activePage === 'player' && (
@@ -925,10 +1822,10 @@ const BotCStatsTracker = () => {
                                   <div key={idx2} onClick={() => handlePlayerClick(player.name)}
                                     className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all ${player.name === selectedPlayer.name ? 'bg-purple-900 bg-opacity-40 border border-purple-500' : 'bg-gray-700 hover:bg-gray-600 border border-transparent'}`}>
                                     <div className="flex items-center gap-3">
-                                      <span className="font-medium text-white hover:text-purple-300">{player.name}</span>
+                                      <span className={`font-medium hover:text-purple-300 ${player.result === 'Sieg' ? 'text-green-300' : 'text-gray-300'}`}>{player.name}</span>
                                       <span className={`text-xs px-2 py-1 rounded ${player.team === 'Böse' ? 'bg-red-700 bg-opacity-60 text-red-200' : 'bg-blue-700 bg-opacity-60 text-blue-200'}`}>{player.role}</span>
                                     </div>
-                                    <span className={`text-xs ${player.alive ? 'text-green-400' : 'text-gray-500'}`}>{player.alive ? '✓ Lebt' : '✗ Tot'}</span>
+                                    {player.result === 'Sieg' && <span className="text-xs text-green-400 font-semibold">✓ Sieg</span>}
                                   </div>
                                 ))}
                               </div>
