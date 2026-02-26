@@ -1,5 +1,32 @@
 import React, { useState, useEffect } from 'react';
-import { Search, TrendingUp, Users, Award, Skull, Heart, ChevronDown, ChevronUp, BookOpen, Calendar, Scroll, UserCheck, Upload, X, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, TrendingUp, Users, Award, Skull, Heart, ChevronDown, ChevronUp, BookOpen, Calendar, Scroll, UserCheck, Upload, X, AlertCircle, Trash2, LayoutGrid, User, ArrowUpDown, ArrowUp, ArrowDown, Trophy, Shield, Swords, Crown } from 'lucide-react';
+import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
+
+const ROLE_CATEGORIES = {
+  Info: ['Washerwoman','Librarian','Investigator','Chef','Empath','Fortune Teller','Undertaker','Ravenkeeper','Flowergirl','Town Crier','Oracle','Seamstress','Mathematician','Clockmaker','Dreamer','Balloonist','Juggler','Savant','Artist','Bounty Hunter','Poppy Grower','Gossip','General','Chambermaid','Pixie','Amnesiac','King','Shugenja','Sage','Village Idiot','Fisherman','Vizier','Alchemist','Cannibal','Huntsman'],
+  Schutz: ['Monk','Sailor','Innkeeper','Grandmother','Minstrel','Tea Lady','Pacifist','Exorcist','Courtier','Fool','Soldier','Lycanthrope','Nightwatchman','Professor','Bodyguard','Noble','Farmer','Acrobat'],
+  Aktiv: ['Slayer','Virgin','Mayor','Golem','Tinker','Gunslinger','Banshee','High Priestess','Magician','Puzzlemaster'],
+  Aussenseiter: ['Drunk','Recluse','Saint','Butler','Lunatic','Mutant','Barber','Moonchild','Goon','Damsel','Plague Doctor','Snitch','Politician','Zealot','Sweetheart','Klutz'],
+  Minion: ['Poisoner','Spy','Scarlet Woman','Baron','Godfather','Assassin','Mastermind','Evil Twin','Witch','Cerenovus','Pit-Hag','Mezepheles','Psychopath','Organ Grinder','Marionette','Harpy','Fearmonger','Summoner'],
+  Daemon: ['Imp','Zombuul','Pukka','Shabaloth','Po','Vigormortis','No Dashii','Vortox','Fang Gu','Al-Hadikhia','Leviathan','Ojo','Kazali','Yaggababble','Lleech'],
+};
+
+const CATEGORY_DISPLAY = {
+  Info:         { label: 'Info',         color: '#60a5fa', emoji: '🔍' },
+  Schutz:       { label: 'Schutz',       color: '#34d399', emoji: '🛡️' },
+  Aktiv:        { label: 'Aktiv/Kill',   color: '#fbbf24', emoji: '⚡' },
+  Aussenseiter: { label: 'Außenseiter',  color: '#a78bfa', emoji: '🎭' },
+  Minion:       { label: 'Böse Support', color: '#f87171', emoji: '🗡️' },
+  Daemon:       { label: 'Dämon',        color: '#fb7185', emoji: '😈' },
+  Sonstige:     { label: 'Sonstige',     color: '#9ca3af', emoji: '❓' },
+};
+
+const getRoleCategory = (role) => {
+  for (const [cat, roles] of Object.entries(ROLE_CATEGORIES)) {
+    if (roles.some(r => r.toLowerCase() === role.toLowerCase())) return cat;
+  }
+  return 'Sonstige';
+};
 
 const BotCStatsTracker = () => {
   const [searchQuery, setSearchQuery] = useState('');
@@ -10,6 +37,7 @@ const BotCStatsTracker = () => {
   const [selectedSeason, setSelectedSeason] = useState('all');
   const [selectedScript, setSelectedScript] = useState('all');
   const [selectedTeammate, setSelectedTeammate] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(null); // Rollen-Kategorie Filter
   const [showImport, setShowImport] = useState(false);
   const [importData, setImportData] = useState('');
   const [importError, setImportError] = useState('');
@@ -17,14 +45,19 @@ const BotCStatsTracker = () => {
   const [availablePlayers, setAvailablePlayers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [lastImportDate, setLastImportDate] = useState(null);
+  const [activePage, setActivePage] = useState('player'); // 'player' | 'leaderboard'
+
+  // Leaderboard state
+  const [lbSortKey, setLbSortKey] = useState('winrate');
+  const [lbSortDir, setLbSortDir] = useState('desc');
+  const [lbSeason, setLbSeason] = useState('all');
+  const [lbScript, setLbScript] = useState('all');
+  const [lbSearch, setLbSearch] = useState('');
+  const [lbTeamFilter, setLbTeamFilter] = useState('all'); // 'all' | 'good' | 'evil'
+  const [lbMinGames, setLbMinGames] = useState(1);
 
   const demoMatches = [
-    { 
-      id: 1, 
-      date: '2025-01-20',
-      season: '2025',
-      script: 'Trouble Brewing',
-      storyteller: 'ClockMaster',
+    { id: 1, date: '2025-01-20', season: '2025', script: 'Trouble Brewing', storyteller: 'ClockMaster',
       players: [
         { name: 'ShadowPlayer', role: 'Imp', team: 'Böse', alive: false, result: 'Sieg' },
         { name: 'TowerGuard', role: 'Washerwoman', team: 'Gut', alive: false, result: 'Niederlage' },
@@ -32,24 +65,14 @@ const BotCStatsTracker = () => {
         { name: 'MoonShadow', role: 'Ravenkeeper', team: 'Gut', alive: false, result: 'Niederlage' }
       ]
     },
-    { 
-      id: 2, 
-      date: '2025-01-19',
-      season: '2025',
-      script: 'Bad Moon Rising',
-      storyteller: 'TowerGuard',
+    { id: 2, date: '2025-01-19', season: '2025', script: 'Bad Moon Rising', storyteller: 'TowerGuard',
       players: [
         { name: 'ShadowPlayer', role: 'Tea Lady', team: 'Gut', alive: true, result: 'Sieg' },
         { name: 'ClockMaster', role: 'Zombuul', team: 'Böse', alive: false, result: 'Niederlage' },
         { name: 'NightOwl', role: 'Godfather', team: 'Böse', alive: false, result: 'Niederlage' }
       ]
     },
-    { 
-      id: 3, 
-      date: '2025-01-18',
-      season: '2025',
-      script: 'Sects and Violets',
-      storyteller: 'MoonShadow',
+    { id: 3, date: '2025-01-18', season: '2025', script: 'Sects and Violets', storyteller: 'MoonShadow',
       players: [
         { name: 'ShadowPlayer', role: 'Vigormortis', team: 'Böse', alive: false, result: 'Niederlage' },
         { name: 'TowerGuard', role: 'Flowergirl', team: 'Gut', alive: true, result: 'Sieg' },
@@ -58,28 +81,17 @@ const BotCStatsTracker = () => {
     }
   ];
 
-  // Lade gespeicherte Daten beim Start
-  useEffect(() => {
-    loadSavedData();
-  }, []);
+  useEffect(() => { loadSavedData(); }, []);
 
   const loadSavedData = () => {
     try {
       setIsLoading(true);
       const savedMatches = localStorage.getItem('botc-matches');
       const savedDate = localStorage.getItem('botc-import-date');
-      
-      if (savedMatches) {
-        const parsedMatches = JSON.parse(savedMatches);
-        setImportedMatches(parsedMatches);
-        console.log('Gespeicherte Spiele geladen:', parsedMatches.length);
-      }
-      
-      if (savedDate) {
-        setLastImportDate(savedDate);
-      }
+      if (savedMatches) { setImportedMatches(JSON.parse(savedMatches)); }
+      if (savedDate) { setLastImportDate(savedDate); }
     } catch (error) {
-      console.log('Keine gespeicherten Daten gefunden oder Fehler beim Laden:', error);
+      console.log('Fehler beim Laden:', error);
     } finally {
       setIsLoading(false);
     }
@@ -91,15 +103,13 @@ const BotCStatsTracker = () => {
       const now = new Date().toLocaleString('de-DE');
       localStorage.setItem('botc-import-date', now);
       setLastImportDate(now);
-      console.log('Spiele gespeichert:', matchesArray.length);
     } catch (error) {
-      console.error('Fehler beim Speichern:', error);
-      alert('⚠️ Fehler beim Speichern der Daten. Bitte versuche es erneut.');
+      alert('⚠️ Fehler beim Speichern der Daten.');
     }
   };
 
   const clearStoredData = () => {
-    if (confirm('Möchtest du wirklich alle gespeicherten Spiele löschen? Diese Aktion kann nicht rückgängig gemacht werden.')) {
+    if (confirm('Möchtest du wirklich alle gespeicherten Spiele löschen?')) {
       try {
         localStorage.removeItem('botc-matches');
         localStorage.removeItem('botc-import-date');
@@ -107,7 +117,6 @@ const BotCStatsTracker = () => {
         setLastImportDate(null);
         alert('✅ Alle gespeicherten Daten wurden gelöscht.');
       } catch (error) {
-        console.error('Fehler beim Löschen:', error);
         alert('⚠️ Fehler beim Löschen der Daten.');
       }
     }
@@ -117,233 +126,159 @@ const BotCStatsTracker = () => {
     try {
       setImportError('');
       const lines = data.trim().split('\n').filter(line => line.trim());
-      
-      if (lines.length < 2) {
-        setImportError('Keine gültigen Daten gefunden. Mindestens eine Kopfzeile und eine Datenzeile werden benötigt.');
-        return;
-      }
-
+      if (lines.length < 2) { setImportError('Keine gültigen Daten gefunden.'); return; }
       const gameData = {};
-      let parsedCount = 0;
-      let skippedCount = 0;
-
+      let parsedCount = 0, skippedCount = 0;
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split('\t');
-        
-        if (values.length < 7) {
-          skippedCount++;
-          continue;
-        }
-
-        const gameId = values[0].trim();
-        const dateStr = values[1].trim();
-        const playerName = values[2].trim();
-        const role = values[3].trim();
-        const resultStr = values[4].trim();
-        const scriptShort = values[5].trim();
-        const teamStr = values[6].trim();
-
-        if (!gameId || !playerName || !role) {
-          skippedCount++;
-          continue;
-        }
-
+        if (values.length < 7) { skippedCount++; continue; }
+        const gameId = values[0].trim(), dateStr = values[1].trim(), playerName = values[2].trim();
+        const role = values[3].trim(), resultStr = values[4].trim(), scriptShort = values[5].trim(), teamStr = values[6].trim();
+        if (!gameId || !playerName || !role) { skippedCount++; continue; }
         const result = resultStr.toLowerCase() === 'win' ? 'Sieg' : 'Niederlage';
         const team = teamStr.toLowerCase() === 'good' ? 'Gut' : 'Böse';
-
         const dateParts = dateStr.split('/');
-        const formattedDate = dateParts.length === 3 
-          ? `${dateParts[2]}-${dateParts[1].padStart(2, '0')}-${dateParts[0].padStart(2, '0')}` 
-          : dateStr;
-
-        const scriptMap = {
-          'S&V': 'Sects and Violets',
-          'TB': 'Trouble Brewing',
-          'BMR': 'Bad Moon Rising'
-        };
+        const formattedDate = dateParts.length === 3 ? `${dateParts[2]}-${dateParts[1].padStart(2,'0')}-${dateParts[0].padStart(2,'0')}` : dateStr;
+        const scriptMap = { 'S&V': 'Sects and Violets', 'TB': 'Trouble Brewing', 'BMR': 'Bad Moon Rising' };
         const script = scriptMap[scriptShort] || scriptShort;
-
         if (!gameData[gameId]) {
-          gameData[gameId] = {
-            id: parseInt(gameId) || parsedCount,
-            date: formattedDate,
-            season: dateParts.length === 3 ? dateParts[2] : '2025',
-            script: script,
-            storyteller: 'Unknown',
-            players: []
-          };
+          gameData[gameId] = { id: parseInt(gameId) || parsedCount, date: formattedDate, season: dateParts.length === 3 ? dateParts[2] : '2025', script, storyteller: 'Unknown', players: [] };
         }
-
-        const alive = Math.random() > 0.4;
-
-        gameData[gameId].players.push({
-          name: playerName,
-          role: role,
-          team: team,
-          alive: alive,
-          result: result
-        });
-
+        gameData[gameId].players.push({ name: playerName, role, team, alive: Math.random() > 0.4, result });
         parsedCount++;
       }
-
       const matchesArray = Object.values(gameData);
-      
-      if (matchesArray.length === 0) {
-        setImportError('Keine gültigen Spiele gefunden. Bitte überprüfe das Format deiner Daten.');
-        return;
-      }
-
-      // Speichere die Daten
+      if (matchesArray.length === 0) { setImportError('Keine gültigen Spiele gefunden.'); return; }
       saveMatchesToStorage(matchesArray);
-      
       setImportedMatches(matchesArray);
-      
       const uniquePlayers = new Set();
-      matchesArray.forEach(match => {
-        match.players.forEach(p => uniquePlayers.add(p.name));
-      });
-      
-      const playersList = Array.from(uniquePlayers).sort().map((name, idx) => ({
-        id: idx + 1,
-        name: name,
-        avatar: '👤'
-      }));
-      
-      setAvailablePlayers(playersList);
+      matchesArray.forEach(m => m.players.forEach(p => uniquePlayers.add(p.name)));
+      setAvailablePlayers(Array.from(uniquePlayers).sort().map((name, idx) => ({ id: idx+1, name, avatar: '👤' })));
       setShowImport(false);
       setImportData('');
-      
-      const message = `✅ Import erfolgreich!\n\n${matchesArray.length} Spiele importiert\n${uniquePlayers.size} Spieler gefunden${skippedCount > 0 ? `\n${skippedCount} Zeilen übersprungen` : ''}\n\nDeine Daten wurden in deinem Browser gespeichert und werden beim nächsten Besuch automatisch geladen.`;
-      alert(message);
-      
+      alert(`✅ Import erfolgreich!\n\n${matchesArray.length} Spiele importiert\n${uniquePlayers.size} Spieler gefunden${skippedCount > 0 ? `\n${skippedCount} Zeilen übersprungen` : ''}`);
     } catch (error) {
-      setImportError('Fehler beim Parsen der Daten: ' + error.message);
-      console.error('Import error:', error);
+      setImportError('Fehler beim Parsen: ' + error.message);
     }
   };
+
+  const getAllMatches = () => importedMatches.length > 0 ? importedMatches : demoMatches;
 
   const getPlayerMatches = (playerName) => {
-    const allMatches = importedMatches.length > 0 ? importedMatches : demoMatches;
-    return allMatches.filter(match => {
-      const isPlayer = match.players.some(p => p.name === playerName);
-      const isStoryteller = match.storyteller === playerName;
-      return isPlayer || isStoryteller;
-    }).map(match => {
-      const playerData = match.players.find(p => p.name === playerName);
-      if (playerData) {
-        return {
-          ...match,
-          role: playerData.role,
-          team: playerData.team,
-          result: playerData.result,
-          alive: playerData.alive
-        };
-      } else {
-        return {
-          ...match,
-          role: 'Storyteller',
-          team: 'Storyteller',
-          result: '-',
-          alive: true
-        };
-      }
-    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+    return getAllMatches().filter(match => match.players.some(p => p.name === playerName) || match.storyteller === playerName)
+      .map(match => {
+        const playerData = match.players.find(p => p.name === playerName);
+        if (playerData) return { ...match, role: playerData.role, team: playerData.team, result: playerData.result, alive: playerData.alive };
+        return { ...match, role: 'Storyteller', team: 'Storyteller', result: '-', alive: true };
+      }).sort((a, b) => new Date(b.date) - new Date(a.date));
   };
 
-  const calculateStats = (playerMatches) => {
-    const allMatches = importedMatches.length > 0 ? importedMatches : demoMatches;
-    let filteredMatches = selectedSeason === 'all' ? playerMatches : playerMatches.filter(m => m.season === selectedSeason);
-    
-    if (selectedScript !== 'all') {
-      filteredMatches = filteredMatches.filter(m => m.script === selectedScript);
-    }
+  const calculateStatsForPlayer = (playerName, filterSeason = 'all', filterScript = 'all') => {
+    const allMatches = getAllMatches();
+    let playerMatchList = getPlayerMatches(playerName);
+    if (filterSeason !== 'all') playerMatchList = playerMatchList.filter(m => (m.date ? m.date.substring(0,4) : m.season) === filterSeason);
+    if (filterScript !== 'all') playerMatchList = playerMatchList.filter(m => m.script === filterScript);
+    const playedMatches = playerMatchList.filter(m => m.role !== 'Storyteller');
+    const total = playedMatches.length;
+    const wins = playedMatches.filter(m => m.result === 'Sieg').length;
+    const evilMatches = playedMatches.filter(m => m.team === 'Böse');
+    const goodMatches = playedMatches.filter(m => m.team === 'Gut');
+    const evilWins = evilMatches.filter(m => m.result === 'Sieg').length;
+    const goodWins = goodMatches.filter(m => m.result === 'Sieg').length;
+    let allFilteredMatches = allMatches;
+    if (filterSeason !== 'all') allFilteredMatches = allFilteredMatches.filter(m => (m.date ? m.date.substring(0,4) : m.season) === filterSeason);
+    if (filterScript !== 'all') allFilteredMatches = allFilteredMatches.filter(m => m.script === filterScript);
+    const stGames = allFilteredMatches.filter(m => m.storyteller === playerName).length;
+    return {
+      total, wins,
+      winrate: total > 0 ? parseFloat(((wins / total) * 100).toFixed(1)) : 0,
+      evilGames: evilMatches.length,
+      goodGames: goodMatches.length,
+      evilWinrate: evilMatches.length > 0 ? parseFloat(((evilWins / evilMatches.length) * 100).toFixed(1)) : 0,
+      goodWinrate: goodMatches.length > 0 ? parseFloat(((goodWins / goodMatches.length) * 100).toFixed(1)) : 0,
+      storytellerGames: stGames,
+    };
+  };
 
+  const calculateStats = (playerMatches, playerName) => {
+    const resolvedName = playerName ?? selectedPlayer?.name;
+    const allMatches = getAllMatches();
+    let filteredMatches = selectedSeason === 'all' ? playerMatches : playerMatches.filter(m => (m.date ? m.date.substring(0,4) : m.season) === selectedSeason);
+    if (selectedScript !== 'all') filteredMatches = filteredMatches.filter(m => m.script === selectedScript);
     const playedMatches = filteredMatches.filter(m => m.role !== 'Storyteller');
-
     const total = playedMatches.length;
     const wins = playedMatches.filter(m => m.result === 'Sieg').length;
     const winrate = total > 0 ? ((wins / total) * 100).toFixed(1) : 0;
-
     const evilMatches = playedMatches.filter(m => m.team === 'Böse');
     const goodMatches = playedMatches.filter(m => m.team === 'Gut');
-    
     const evilWins = evilMatches.filter(m => m.result === 'Sieg').length;
     const goodWins = goodMatches.filter(m => m.result === 'Sieg').length;
-    
     const evilWinrate = evilMatches.length > 0 ? ((evilWins / evilMatches.length) * 100).toFixed(1) : 0;
     const goodWinrate = goodMatches.length > 0 ? ((goodWins / goodMatches.length) * 100).toFixed(1) : 0;
-
-    const roleCounts = {};
-    const roleWins = {};
-    
+    const roleCounts = {}, roleWins = {};
     playedMatches.forEach(m => {
       roleCounts[m.role] = (roleCounts[m.role] || 0) + 1;
-      if (m.result === 'Sieg') {
-        roleWins[m.role] = (roleWins[m.role] || 0) + 1;
-      }
+      if (m.result === 'Sieg') roleWins[m.role] = (roleWins[m.role] || 0) + 1;
     });
-
     const roleStats = Object.keys(roleCounts).map(role => ({
-      role,
-      games: roleCounts[role],
-      wins: roleWins[role] || 0,
+      role, games: roleCounts[role], wins: roleWins[role] || 0,
       winrate: ((roleWins[role] || 0) / roleCounts[role] * 100).toFixed(1)
     })).sort((a, b) => b.games - a.games);
+    let allFilteredMatches = selectedSeason === 'all' ? allMatches : allMatches.filter(m => (m.date ? m.date.substring(0,4) : m.season) === selectedSeason);
+    if (selectedScript !== 'all') allFilteredMatches = allFilteredMatches.filter(m => m.script === selectedScript);
+    const stGames = allFilteredMatches.filter(m => m.storyteller === resolvedName);
 
-    let allFilteredMatches = selectedSeason === 'all' ? allMatches : allMatches.filter(m => m.season === selectedSeason);
-    
-    if (selectedScript !== 'all') {
-      allFilteredMatches = allFilteredMatches.filter(m => m.script === selectedScript);
-    }
-    
-    const stGames = allFilteredMatches.filter(m => m.storyteller === selectedPlayer?.name);
-
+    // Mitspieler-Stats direkt aus allen gefilterten Spielen berechnen —
+    // gleiche Datenbasis wie die Match History, um Diskrepanzen zu vermeiden
     const teammateStats = {};
-    playedMatches.forEach(match => {
-      const fullMatch = allMatches.find(m => m.id === match.id);
-      if (!fullMatch) return;
-      
-      const currentPlayerData = fullMatch.players.find(p => p.name === selectedPlayer?.name);
-      if (currentPlayerData) {
-        fullMatch.players.forEach(p => {
-          if (p.name !== selectedPlayer?.name) {
-            if (!teammateStats[p.name]) {
-              teammateStats[p.name] = {
-                name: p.name,
-                sameTeam: 0,
-                sameTeamWins: 0,
-                total: 0
-              };
-            }
-            teammateStats[p.name].total++;
-            if (p.team === currentPlayerData.team) {
-              teammateStats[p.name].sameTeam++;
-              if (match.result === 'Sieg') {
-                teammateStats[p.name].sameTeamWins++;
-              }
-            }
-          }
-        });
-      }
+    allFilteredMatches.forEach(fullMatch => {
+      const currentPlayerData = fullMatch.players.find(p => p.name === resolvedName);
+      if (!currentPlayerData) return; // Spieler nicht in diesem Spiel
+      // Ergebnis des Spielers aus dem entsprechenden playedMatch holen
+      const playerMatchEntry = playedMatches.find(m => m.id === fullMatch.id);
+      if (!playerMatchEntry) return; // Storyteller-Spiele überspringen
+      fullMatch.players.forEach(p => {
+        if (p.name === resolvedName) return;
+        if (!teammateStats[p.name]) teammateStats[p.name] = { name: p.name, sameTeam: 0, sameTeamWins: 0, oppTeam: 0, oppTeamWins: 0, total: 0 };
+        teammateStats[p.name].total++;
+        if (p.team === currentPlayerData.team) {
+          teammateStats[p.name].sameTeam++;
+          if (playerMatchEntry.result === 'Sieg') teammateStats[p.name].sameTeamWins++;
+        } else {
+          teammateStats[p.name].oppTeam++;
+          if (playerMatchEntry.result === 'Sieg') teammateStats[p.name].oppTeamWins++;
+        }
+      });
     });
-
-    const teammateList = Object.values(teammateStats).map(t => ({
-      ...t,
-      winrate: t.sameTeam > 0 ? ((t.sameTeamWins / t.sameTeam) * 100).toFixed(1) : 0
-    })).sort((a, b) => b.sameTeam - a.sameTeam);
+    // Spinnennetz: Winrate pro Rollen-Kategorie
+    const catMap = {};
+    playedMatches.forEach(m => {
+      const cat = getRoleCategory(m.role);
+      if (!catMap[cat]) catMap[cat] = { wins: 0, total: 0 };
+      catMap[cat].total++;
+      if (m.result === 'Sieg') catMap[cat].wins++;
+    });
+    const radarData = Object.entries(CATEGORY_DISPLAY).map(([key, cfg]) => {
+      const d = catMap[key];
+      return {
+        category: cfg.label,
+        emoji: cfg.emoji,
+        color: cfg.color,
+        winrate: d ? parseFloat(((d.wins / d.total) * 100).toFixed(1)) : null,
+        games: d ? d.total : 0,
+        wins: d ? d.wins : 0,
+      };
+    }).filter(d => d.games > 0);
 
     return {
-      total,
-      wins,
-      winrate,
-      evilGames: evilMatches.length,
-      goodGames: goodMatches.length,
-      evilWinrate,
-      goodWinrate,
-      roleStats,
-      storytellerGames: stGames.length,
-      teammateStats: teammateList
+      total, wins, winrate,
+      evilGames: evilMatches.length, goodGames: goodMatches.length, evilWinrate, goodWinrate,
+      roleStats, storytellerGames: stGames.length, radarData,
+      teammateStats: Object.values(teammateStats).map(t => ({
+        ...t,
+        winrate: t.sameTeam > 0 ? ((t.sameTeamWins / t.sameTeam) * 100).toFixed(1) : null,
+        oppWinrate: t.oppTeam > 0 ? ((t.oppTeamWins / t.oppTeam) * 100).toFixed(1) : null,
+      })).sort((a, b) => b.total - a.total)
     };
   };
 
@@ -353,60 +288,91 @@ const BotCStatsTracker = () => {
       const playerMatches = getPlayerMatches(player.name);
       setSelectedPlayer(player);
       setMatches(playerMatches);
-      setPlayerStats(calculateStats(playerMatches));
+      setPlayerStats(calculateStats(playerMatches, player.name));
       setExpandedMatch(null);
       setSearchQuery('');
       setSelectedTeammate(null);
+      setSelectedCategory(null);
+      setActivePage('player');
     }
   };
 
-  const getAvailableSeasons = () => {
-    if (!matches || matches.length === 0) return [];
-    const seasons = new Set();
-    matches.forEach(m => seasons.add(m.season));
-    return Array.from(seasons).sort().reverse();
+  const getAvailableYears = () => {
+    const years = new Set();
+    getAllMatches().forEach(m => {
+      const year = m.date ? m.date.substring(0, 4) : m.season;
+      if (year) years.add(year);
+    });
+    return Array.from(years).sort().reverse();
   };
 
+  // keep alias for legacy usage
+  const getAvailableSeasons = getAvailableYears;
+
   const getAvailableScripts = () => {
-    if (!matches || matches.length === 0) return [];
     const scripts = new Set();
-    matches.forEach(m => scripts.add(m.script));
+    getAllMatches().forEach(m => scripts.add(m.script));
     return Array.from(scripts).sort();
   };
 
   useEffect(() => {
-    const currentMatches = importedMatches.length > 0 ? importedMatches : demoMatches;
+    const currentMatches = getAllMatches();
     const uniquePlayers = new Set();
-    currentMatches.forEach(match => {
-      match.players.forEach(p => uniquePlayers.add(p.name));
-    });
-    
-    const playersList = Array.from(uniquePlayers).sort().map((name, idx) => ({
-      id: idx + 1,
-      name: name,
-      avatar: '👤'
-    }));
-    
+    currentMatches.forEach(match => match.players.forEach(p => uniquePlayers.add(p.name)));
+    const playersList = Array.from(uniquePlayers).sort().map((name, idx) => ({ id: idx+1, name, avatar: '👤' }));
     setAvailablePlayers(playersList);
-    
-    if (playersList.length > 0) {
+    if (playersList.length > 0 && !selectedPlayer) {
       const player = playersList[0];
       const playerMatches = getPlayerMatches(player.name);
       setSelectedPlayer(player);
       setMatches(playerMatches);
-      setPlayerStats(calculateStats(playerMatches));
     }
   }, [importedMatches]);
 
   useEffect(() => {
-    if (selectedPlayer && matches.length > 0) {
-      setPlayerStats(calculateStats(matches));
-    }
+    if (selectedPlayer && matches.length > 0) setPlayerStats(calculateStats(matches, selectedPlayer.name));
   }, [selectedSeason, selectedScript]);
 
-  const filteredPlayers = availablePlayers.filter(p => 
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Leaderboard data computation
+  const getLeaderboardData = () => {
+    return availablePlayers.map(player => ({
+      ...player,
+      ...calculateStatsForPlayer(player.name, lbSeason, lbScript)
+    })).filter(p => {
+      if (p.total < lbMinGames) return false;
+      if (lbSearch && !p.name.toLowerCase().includes(lbSearch.toLowerCase())) return false;
+      if (lbTeamFilter === 'good' && p.goodGames === 0) return false;
+      if (lbTeamFilter === 'evil' && p.evilGames === 0) return false;
+      return true;
+    }).sort((a, b) => {
+      const getVal = (p) => {
+        if (lbTeamFilter === 'good') return lbSortKey === 'winrate' ? p.goodWinrate : (lbSortKey === 'evilWinrate' ? p.goodWinrate : p[lbSortKey]);
+        if (lbTeamFilter === 'evil') return lbSortKey === 'winrate' ? p.evilWinrate : (lbSortKey === 'goodWinrate' ? p.evilWinrate : p[lbSortKey]);
+        return p[lbSortKey] ?? 0;
+      };
+      const av = getVal(a), bv = getVal(b);
+      return lbSortDir === 'desc' ? bv - av : av - bv;
+    });
+  };
+
+  const handleLbSort = (key) => {
+    if (lbSortKey === key) setLbSortDir(d => d === 'desc' ? 'asc' : 'desc');
+    else { setLbSortKey(key); setLbSortDir('desc'); }
+  };
+
+  const SortIcon = ({ colKey }) => {
+    if (lbSortKey !== colKey) return <ArrowUpDown size={14} className="text-gray-500 ml-1" />;
+    return lbSortDir === 'desc' ? <ArrowDown size={14} className="text-purple-400 ml-1" /> : <ArrowUp size={14} className="text-purple-400 ml-1" />;
+  };
+
+  const getRankIcon = (rank) => {
+    if (rank === 1) return <Crown size={18} className="text-yellow-400" />;
+    if (rank === 2) return <Trophy size={18} className="text-gray-400" />;
+    if (rank === 3) return <Trophy size={18} className="text-amber-600" />;
+    return <span className="text-gray-500 font-mono text-sm w-[18px] text-center">{rank}</span>;
+  };
+
+  const filteredPlayers = availablePlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
   if (showImport) {
     return (
@@ -414,83 +380,32 @@ const BotCStatsTracker = () => {
         <div className="container mx-auto px-4 py-8 max-w-4xl">
           <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-purple-400 flex items-center gap-2">
-                <Upload size={28} />
-                Spiele importieren
-              </h2>
-              <button
-                onClick={() => {
-                  setShowImport(false);
-                  setImportData('');
-                  setImportError('');
-                }}
-                className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"
-              >
-                <X size={18} />
-                Abbrechen
-              </button>
+              <h2 className="text-2xl font-bold text-purple-400 flex items-center gap-2"><Upload size={28} />Spiele importieren</h2>
+              <button onClick={() => { setShowImport(false); setImportData(''); setImportError(''); }} className="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors flex items-center gap-2"><X size={18} />Abbrechen</button>
             </div>
-
             {lastImportDate && (
               <div className="mb-4 bg-green-900 bg-opacity-30 border border-green-500 rounded-lg p-4">
-                <p className="text-green-200 text-sm">
-                  ℹ️ Letzter Import: {lastImportDate}
-                </p>
-                <p className="text-green-100 text-xs mt-1">
-                  Ein neuer Import wird die aktuellen Daten überschreiben.
-                </p>
+                <p className="text-green-200 text-sm">ℹ️ Letzter Import: {lastImportDate}</p>
+                <p className="text-green-100 text-xs mt-1">Ein neuer Import wird die aktuellen Daten überschreiben.</p>
               </div>
             )}
-
             <div className="mb-4 bg-blue-900 bg-opacity-30 border border-blue-500 rounded-lg p-4">
-              <p className="text-blue-200 mb-2 font-semibold">
-                📋 Anleitung:
-              </p>
-              <p className="text-sm text-blue-100 mb-2">
-                Füge deine Spieldaten im Tab-getrennten Format ein. Kopiere die Daten direkt aus einer Tabellenkalkulation.
-              </p>
-              <p className="text-xs text-blue-200 font-mono bg-blue-950 bg-opacity-50 p-2 rounded">
-                Spiel # → Datum → Name → Rolle → Win/Lose → Set → Team
-              </p>
+              <p className="text-blue-200 mb-2 font-semibold">📋 Anleitung:</p>
+              <p className="text-sm text-blue-100 mb-2">Füge deine Spieldaten im Tab-getrennten Format ein.</p>
+              <p className="text-xs text-blue-200 font-mono bg-blue-950 bg-opacity-50 p-2 rounded">Spiel # → Datum → Name → Rolle → Win/Lose → Set → Team</p>
             </div>
-
-            <textarea
-              value={importData}
-              onChange={(e) => setImportData(e.target.value)}
-              placeholder="Beispiel:
-Spiel #	Datum	Name	Rolle	Win / Lose	Set	Team
-1	14/03/2025	Hung	Mutant	Lose	S&V	Good
-1	14/03/2025	Chi	Klutz	Lose	S&V	Good"
-              className="w-full h-96 bg-gray-900 border border-gray-600 rounded-lg p-4 text-white font-mono text-sm focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
-            />
-
+            <textarea value={importData} onChange={(e) => setImportData(e.target.value)}
+              placeholder={`Beispiel:\nSpiel #\tDatum\tName\tRolle\tWin / Lose\tSet\tTeam\n1\t14/03/2025\tHung\tMutant\tLose\tS&V\tGood`}
+              className="w-full h-96 bg-gray-900 border border-gray-600 rounded-lg p-4 text-white font-mono text-sm focus:outline-none focus:border-purple-500" />
             {importError && (
               <div className="mt-4 p-4 bg-red-900 bg-opacity-30 border border-red-500 rounded-lg text-red-300 flex items-start gap-3">
                 <AlertCircle size={20} className="flex-shrink-0 mt-0.5" />
-                <div>
-                  <p className="font-semibold mb-1">Fehler beim Import:</p>
-                  <p className="text-sm">{importError}</p>
-                </div>
+                <div><p className="font-semibold mb-1">Fehler beim Import:</p><p className="text-sm">{importError}</p></div>
               </div>
             )}
-
             <div className="mt-6 flex gap-4">
-              <button
-                onClick={() => parseImportData(importData)}
-                disabled={!importData.trim()}
-                className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"
-              >
-                <Upload size={20} />
-                Daten importieren & speichern
-              </button>
-              <button
-                onClick={clearStoredData}
-                disabled={importedMatches.length === 0}
-                className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center gap-2"
-              >
-                <Trash2 size={20} />
-                Daten löschen
-              </button>
+              <button onClick={() => parseImportData(importData)} disabled={!importData.trim()} className="flex-1 px-6 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center justify-center gap-2"><Upload size={20} />Daten importieren & speichern</button>
+              <button onClick={clearStoredData} disabled={importedMatches.length === 0} className="px-6 py-3 bg-red-600 hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed rounded-lg font-semibold transition-colors flex items-center gap-2"><Trash2 size={20} />Daten löschen</button>
             </div>
           </div>
         </div>
@@ -501,384 +416,537 @@ Spiel #	Datum	Name	Rolle	Win / Lose	Set	Team
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">🕐</div>
-          <p className="text-xl text-purple-300">Lade Daten...</p>
-        </div>
+        <div className="text-center"><div className="text-6xl mb-4">🕐</div><p className="text-xl text-purple-300">Lade Daten...</p></div>
       </div>
     );
   }
 
+  const leaderboardData = getLeaderboardData();
+  const allScripts = getAvailableScripts();
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 text-white">
       <div className="container mx-auto px-4 py-8 max-w-6xl">
-        <div className="mb-8">
+
+        {/* Header */}
+        <div className="mb-6">
           <div className="flex items-center justify-between mb-2 flex-wrap gap-4">
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
               🕐 Blood on the Clocktower Stats
             </h1>
-            <button
-              onClick={() => setShowImport(true)}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center gap-2"
-            >
-              <Upload size={18} />
-              Spiele importieren
+            <button onClick={() => setShowImport(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
+              <Upload size={18} />Spiele importieren
             </button>
           </div>
           <p className="text-gray-400">Verfolge deine Spielerstatistiken und Erfolge</p>
           {importedMatches.length > 0 ? (
             <div className="flex items-center gap-4 mt-2">
-              <p className="text-sm text-purple-300">
-                ✓ {importedMatches.length} gespeicherte Spiele geladen
-              </p>
-              {lastImportDate && (
-                <p className="text-xs text-gray-400">
-                  Letzter Import: {lastImportDate}
-                </p>
-              )}
+              <p className="text-sm text-purple-300">✓ {importedMatches.length} gespeicherte Spiele geladen</p>
+              {lastImportDate && <p className="text-xs text-gray-400">Letzter Import: {lastImportDate}</p>}
             </div>
           ) : (
-            <p className="text-sm text-yellow-300 mt-1">
-              ⚠️ Demo-Modus aktiv - Importiere deine Spiele, um sie dauerhaft zu speichern
-            </p>
+            <p className="text-sm text-yellow-300 mt-1">⚠️ Demo-Modus aktiv - Importiere deine Spiele, um sie dauerhaft zu speichern</p>
           )}
         </div>
 
-        <div className="mb-8">
-          <div className="relative">
-            <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
-            <input
-              type="text"
-              placeholder="Spielername suchen..."
-              className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
-          <div className="mt-3 flex gap-2 flex-wrap">
-            {(searchQuery ? filteredPlayers : availablePlayers).slice(0, 10).map(player => (
-              <button
-                key={player.id}
-                onClick={() => handlePlayerClick(player.name)}
-                className={`px-3 py-1.5 rounded-lg text-sm transition-all ${selectedPlayer?.name === player.name ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-800 hover:bg-gray-700'}`}
-              >
-                {player.avatar} {player.name}
-              </button>
-            ))}
-            {searchQuery && filteredPlayers.length > 10 && (
-              <span className="px-3 py-1.5 text-sm text-gray-400">
-                +{filteredPlayers.length - 10} weitere...
-              </span>
-            )}
-          </div>
+        {/* Page Nav Tabs */}
+        <div className="flex gap-2 mb-6 border-b border-gray-700 pb-1">
+          <button
+            onClick={() => setActivePage('player')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'player' ? 'bg-gray-800 text-purple-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            <User size={16} />Spieler-Details
+          </button>
+          <button
+            onClick={() => setActivePage('leaderboard')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'leaderboard' ? 'bg-gray-800 text-purple-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            <LayoutGrid size={16} />Spieler-Übersicht
+          </button>
         </div>
 
-        {selectedPlayer && playerStats && (
+        {/* ======================== LEADERBOARD PAGE ======================== */}
+        {activePage === 'leaderboard' && (
           <div>
-            {getAvailableSeasons().length > 1 && (
-              <div className="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
-                <div className="flex items-center gap-3 mb-3">
-                  <Calendar size={20} className="text-purple-400" />
-                  <h3 className="font-semibold">Season Filter</h3>
+            {/* Filters */}
+            <div className="bg-gray-800 rounded-lg p-5 mb-6 border border-gray-700 space-y-4">
+              <div className="flex flex-wrap gap-4 items-end">
+                {/* Search */}
+                <div className="flex-1 min-w-[180px]">
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium">Spieler suchen</label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                    <input type="text" placeholder="Name..." value={lbSearch} onChange={e => setLbSearch(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-600 rounded-lg pl-9 pr-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500" />
+                  </div>
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => setSelectedSeason('all')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                  >
-                    All Time
-                  </button>
-                  {getAvailableSeasons().map(season => (
-                    <button
-                      key={season}
-                      onClick={() => setSelectedSeason(season)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === season ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                    >
-                      Season {season}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
-            {getAvailableScripts().length > 1 && (
-              <div className="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
-                <div className="flex items-center gap-3 mb-3">
-                  <Scroll size={20} className="text-purple-400" />
-                  <h3 className="font-semibold">Script Filter</h3>
-                </div>
-                <div className="flex gap-2 flex-wrap">
-                  <button
-                    onClick={() => setSelectedScript('all')}
-                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedScript === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                  >
-                    Alle Scripts
-                  </button>
-                  {getAvailableScripts().map(script => (
-                    <button
-                      key={script}
-                      onClick={() => setSelectedScript(script)}
-                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedScript === script ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
-                    >
-                      {script}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="bg-gradient-to-r from-purple-800 to-pink-800 rounded-lg p-6 mb-6 shadow-xl">
-              <div className="flex items-center gap-4">
-                <div className="text-6xl">{selectedPlayer.avatar}</div>
+                {/* Year filter - always visible */}
                 <div>
-                  <h2 className="text-3xl font-bold">{selectedPlayer.name}</h2>
-                  <p className="text-purple-200">{playerStats.total} Spiele gespielt • {playerStats.storytellerGames} als Storyteller</p>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Calendar size={12} />Jahr</label>
+                  <div className="flex gap-1 flex-wrap">
+                    <button onClick={() => setLbSeason('all')}
+                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${lbSeason === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                      Alle
+                    </button>
+                    {getAvailableYears().map(y => (
+                      <button key={y} onClick={() => setLbSeason(y)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${lbSeason === y ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        {y}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-yellow-500 transition-colors">
-                <div className="flex items-center gap-3 mb-2">
-                  <Award className="text-yellow-400" size={24} />
-                  <h3 className="text-lg font-semibold">Gesamt Winrate</h3>
-                </div>
-                <p className="text-3xl font-bold text-yellow-400">{playerStats.winrate}%</p>
-                <p className="text-gray-400 text-sm">{playerStats.wins}S / {playerStats.total - playerStats.wins}N</p>
-              </div>
-
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-red-500 transition-colors">
-                <div className="flex items-center gap-3 mb-2">
-                  <Skull className="text-red-400" size={24} />
-                  <h3 className="text-lg font-semibold">Böse Winrate</h3>
-                </div>
-                <p className="text-3xl font-bold text-red-400">{playerStats.evilWinrate}%</p>
-                <p className="text-gray-400 text-sm">{playerStats.evilGames} Spiele</p>
-              </div>
-
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-blue-500 transition-colors">
-                <div className="flex items-center gap-3 mb-2">
-                  <Heart className="text-blue-400" size={24} />
-                  <h3 className="text-lg font-semibold">Gut Winrate</h3>
-                </div>
-                <p className="text-3xl font-bold text-blue-400">{playerStats.goodWinrate}%</p>
-                <p className="text-gray-400 text-sm">{playerStats.goodGames} Spiele</p>
-              </div>
-
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-purple-500 transition-colors">
-                <div className="flex items-center gap-3 mb-2">
-                  <BookOpen className="text-purple-400" size={24} />
-                  <h3 className="text-lg font-semibold">Storyteller</h3>
-                </div>
-                <p className="text-3xl font-bold text-purple-400">{playerStats.storytellerGames}</p>
-                <p className="text-gray-400 text-sm">Spiele geleitet</p>
-              </div>
-            </div>
-
-            {playerStats.roleStats.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Users size={24} className="text-purple-400" />
-                  Rollen-Statistiken
-                </h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-gray-700">
-                        <th className="text-left py-2 px-2">Rolle</th>
-                        <th className="text-center py-2 px-2">Spiele</th>
-                        <th className="text-center py-2 px-2">Siege</th>
-                        <th className="text-center py-2 px-2">Winrate</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {playerStats.roleStats.map((stat, idx) => (
-                        <tr key={idx} className="border-b border-gray-700 hover:bg-gray-750">
-                          <td className="py-3 px-2 font-medium">{stat.role}</td>
-                          <td className="text-center py-3 px-2">{stat.games}</td>
-                          <td className="text-center py-3 px-2">{stat.wins}</td>
-                          <td className="text-center py-3 px-2">
-                            <span className={`font-bold ${parseFloat(stat.winrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                              {stat.winrate}%
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {playerStats.teammateStats.length > 0 && (
-              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <UserCheck size={24} className="text-purple-400" />
-                  Mitspieler-Statistiken
-                </h3>
-                <p className="text-gray-400 text-sm mb-4">Winrate wenn im selben Team</p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {playerStats.teammateStats.map((teammate, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`p-4 rounded-lg cursor-pointer transition-all ${selectedTeammate === teammate.name ? 'bg-purple-700 border-2 border-purple-400' : 'bg-gray-700 hover:bg-gray-650 border-2 border-transparent'}`}
-                      onClick={() => setSelectedTeammate(selectedTeammate === teammate.name ? null : teammate.name)}
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="font-semibold text-lg">{teammate.name}</span>
-                        <span className={`text-2xl font-bold ${parseFloat(teammate.winrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>
-                          {teammate.winrate}%
-                        </span>
-                      </div>
-                      <div className="text-sm text-gray-300">
-                        <span>{teammate.sameTeam} Spiele im selben Team</span>
-                        <span className="mx-2">•</span>
-                        <span>{teammate.sameTeamWins} Siege</span>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1">
-                        {teammate.total} Spiele insgesamt zusammen
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
-              <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                <TrendingUp size={24} className="text-purple-400" />
-                Match History
-                {selectedTeammate && (
-                  <span className="text-sm font-normal text-purple-300 ml-2">
-                    (gefiltert: mit {selectedTeammate} im selben Team)
-                  </span>
-                )}
-              </h3>
-              <div className="space-y-2">
-                {matches.filter(match => {
-                  const seasonMatch = selectedSeason === 'all' || match.season === selectedSeason;
-                  const scriptMatch = selectedScript === 'all' || match.script === selectedScript;
-                  
-                  let teammateMatch = true;
-                  if (selectedTeammate && match.role !== 'Storyteller') {
-                    const allMatches = importedMatches.length > 0 ? importedMatches : demoMatches;
-                    const fullMatch = allMatches.find(m => m.id === match.id);
-                    if (fullMatch) {
-                      const currentPlayerData = fullMatch.players.find(p => p.name === selectedPlayer.name);
-                      const teammateData = fullMatch.players.find(p => p.name === selectedTeammate);
-                      teammateMatch = teammateData && currentPlayerData && teammateData.team === currentPlayerData.team;
-                    }
-                  }
-                  
-                  return seasonMatch && scriptMatch && teammateMatch;
-                }).map((match) => {
-                  const allMatches = importedMatches.length > 0 ? importedMatches : demoMatches;
-                  const fullMatch = allMatches.find(m => m.id === match.id);
-                  
-                  return (
-                    <div key={match.id}>
-                      <div
-                        className={`p-4 rounded-lg border-l-4 cursor-pointer transition-all ${match.role === 'Storyteller' ? 'bg-purple-900 bg-opacity-20 border-purple-500 hover:bg-opacity-30' : match.result === 'Sieg' ? 'bg-green-900 bg-opacity-20 border-green-500 hover:bg-opacity-30' : 'bg-red-900 bg-opacity-20 border-red-500 hover:bg-opacity-30'}`}
-                        onClick={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)}
-                      >
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="flex items-center gap-4">
-                            {match.role === 'Storyteller' ? (
-                              <>
-                                <span className="font-bold text-purple-400">Storyteller</span>
-                                <BookOpen size={20} className="text-purple-400" />
-                              </>
-                            ) : (
-                              <>
-                                <span className={`font-bold ${match.result === 'Sieg' ? 'text-green-400' : 'text-red-400'}`}>
-                                  {match.result}
-                                </span>
-                                <span className="font-semibold text-lg">{match.role}</span>
-                                <span className={`px-3 py-1 rounded-full text-sm ${match.team === 'Böse' ? 'bg-red-600 bg-opacity-50' : 'bg-blue-600 bg-opacity-50'}`}>
-                                  {match.team}
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-4">
-                            <div className="text-gray-400 text-sm">
-                              <span className="mr-4">{match.script}</span>
-                              <span>{match.date}</span>
-                            </div>
-                            {expandedMatch === match.id ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
-                          </div>
-                        </div>
-                      </div>
-                      
-                      {expandedMatch === match.id && fullMatch && (
-                        <div className="mt-2 bg-gray-900 bg-opacity-50 rounded-lg p-4 border border-gray-700">
-                          <div className="mb-4 pb-3 border-b border-gray-700">
-                            <div className="flex items-center gap-2">
-                              <BookOpen size={18} className="text-purple-400" />
-                              <span className="text-gray-400">Storyteller:</span>
-                              <span className="font-semibold text-purple-300">
-                                {fullMatch.storyteller}
-                              </span>
-                            </div>
-                          </div>
-                          <h4 className="font-semibold mb-3 text-purple-300">Spieler in diesem Match:</h4>
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            {fullMatch.players.map((player, idx) => (
-                              <div
-                                key={idx}
-                                onClick={() => handlePlayerClick(player.name)}
-                                className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all ${player.name === selectedPlayer.name ? 'bg-purple-900 bg-opacity-40 border border-purple-500' : 'bg-gray-700 hover:bg-gray-600 border border-transparent'}`}
-                              >
-                                <div className="flex items-center gap-3">
-                                  <span className="font-medium text-white hover:text-purple-300">
-                                    {player.name}
-                                  </span>
-                                  <span className={`text-xs px-2 py-1 rounded ${player.team === 'Böse' ? 'bg-red-700 bg-opacity-60 text-red-200' : 'bg-blue-700 bg-opacity-60 text-blue-200'}`}>
-                                    {player.role}
-                                  </span>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span className={`text-xs ${player.alive ? 'text-green-400' : 'text-gray-500'}`}>
-                                    {player.alive ? '✓ Lebt' : '✗ Tot'}
-                                  </span>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-                {matches.filter(match => {
-                  const seasonMatch = selectedSeason === 'all' || match.season === selectedSeason;
-                  const scriptMatch = selectedScript === 'all' || match.script === selectedScript;
-                  
-                  let teammateMatch = true;
-                  if (selectedTeammate && match.role !== 'Storyteller') {
-                    const allMatches = importedMatches.length > 0 ? importedMatches : demoMatches;
-                    const fullMatch = allMatches.find(m => m.id === match.id);
-                    if (fullMatch) {
-                      const currentPlayerData = fullMatch.players.find(p => p.name === selectedPlayer.name);
-                      const teammateData = fullMatch.players.find(p => p.name === selectedTeammate);
-                      teammateMatch = teammateData && currentPlayerData && teammateData.team === currentPlayerData.team;
-                    }
-                  }
-                  
-                  return seasonMatch && scriptMatch && teammateMatch;
-                }).length === 0 && (
-                  <div className="text-center py-8 text-gray-400">
-                    <p>Keine Matches gefunden mit den aktuellen Filtern.</p>
+                {/* Script filter */}
+                {allScripts.length > 1 && (
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Scroll size={12} />Script</label>
+                    <select value={lbScript} onChange={e => setLbScript(e.target.value)}
+                      className="bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500">
+                      <option value="all">Alle Scripts</option>
+                      {allScripts.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                 )}
+
+                {/* Team filter */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Shield size={12} />Team</label>
+                  <div className="flex gap-1">
+                    {[['all', 'Alle'], ['good', '💙 Gut'], ['evil', '❤️ Böse']].map(([val, label]) => (
+                      <button key={val} onClick={() => setLbTeamFilter(val)}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${lbTeamFilter === val ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Min games */}
+                <div>
+                  <label className="block text-xs text-gray-400 mb-1.5 font-medium">Min. Spiele</label>
+                  <input type="number" min={1} max={50} value={lbMinGames} onChange={e => setLbMinGames(parseInt(e.target.value) || 1)}
+                    className="w-20 bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-purple-500" />
+                </div>
+              </div>
+
+              <p className="text-xs text-gray-500">{leaderboardData.length} Spieler angezeigt • Klicke auf eine Spaltenüberschrift zum Sortieren</p>
+            </div>
+
+            {/* Table */}
+            <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-gray-900 border-b border-gray-700">
+                      <th className="text-left py-3 px-4 text-gray-400 font-medium w-10">#</th>
+                      <th className="text-left py-3 px-4 text-gray-400 font-medium">
+                        <button className="flex items-center hover:text-white transition-colors" onClick={() => handleLbSort('name')}>
+                          Spieler <SortIcon colKey="name" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors" onClick={() => handleLbSort('total')}>
+                          Spiele <SortIcon colKey="total" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors" onClick={() => handleLbSort('wins')}>
+                          Siege <SortIcon colKey="wins" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors font-medium text-yellow-400" onClick={() => handleLbSort('winrate')}>
+                          <Award size={14} className="mr-1" />Winrate <SortIcon colKey="winrate" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors font-medium text-blue-400" onClick={() => handleLbSort('goodWinrate')}>
+                          <Heart size={14} className="mr-1" />Gut % <SortIcon colKey="goodWinrate" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors font-medium text-red-400" onClick={() => handleLbSort('evilWinrate')}>
+                          <Skull size={14} className="mr-1" />Böse % <SortIcon colKey="evilWinrate" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors" onClick={() => handleLbSort('goodGames')}>
+                          <Heart size={14} className="mr-1 text-blue-400" />Spiele <SortIcon colKey="goodGames" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors" onClick={() => handleLbSort('evilGames')}>
+                          <Skull size={14} className="mr-1 text-red-400" />Spiele <SortIcon colKey="evilGames" />
+                        </button>
+                      </th>
+                      <th className="text-center py-3 px-4 text-gray-400 font-medium">
+                        <button className="flex items-center mx-auto hover:text-white transition-colors" onClick={() => handleLbSort('storytellerGames')}>
+                          <BookOpen size={14} className="mr-1 text-purple-400" />ST <SortIcon colKey="storytellerGames" />
+                        </button>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leaderboardData.map((player, idx) => {
+                      const dispWinrate = lbTeamFilter === 'good' ? player.goodWinrate : lbTeamFilter === 'evil' ? player.evilWinrate : player.winrate;
+                      return (
+                        <tr key={player.id}
+                          onClick={() => handlePlayerClick(player.name)}
+                          className={`border-b border-gray-700 cursor-pointer transition-all hover:bg-purple-900 hover:bg-opacity-20 ${selectedPlayer?.name === player.name ? 'bg-purple-900 bg-opacity-30' : idx % 2 === 0 ? 'bg-gray-800' : 'bg-gray-850'}`}
+                        >
+                          <td className="py-3 px-4">
+                            <div className="flex items-center justify-center">{getRankIcon(idx + 1)}</div>
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-base">{player.avatar}</span>
+                              <span className="font-semibold text-white hover:text-purple-300 transition-colors">{player.name}</span>
+                              {selectedPlayer?.name === player.name && <span className="text-xs bg-purple-600 px-2 py-0.5 rounded-full text-white">Aktiv</span>}
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center font-mono">{player.total}</td>
+                          <td className="py-3 px-4 text-center font-mono text-green-400">{player.wins}</td>
+                          <td className="py-3 px-4 text-center">
+                            <div className="flex flex-col items-center gap-1">
+                              <span className={`font-bold text-base ${dispWinrate >= 60 ? 'text-green-400' : dispWinrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                {dispWinrate}%
+                              </span>
+                              <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${dispWinrate >= 60 ? 'bg-green-500' : dispWinrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                  style={{ width: `${Math.min(dispWinrate, 100)}%` }} />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`font-semibold ${player.goodWinrate >= 50 ? 'text-blue-300' : 'text-red-400'}`}>{player.goodWinrate}%</span>
+                          </td>
+                          <td className="py-3 px-4 text-center">
+                            <span className={`font-semibold ${player.evilWinrate >= 50 ? 'text-red-300' : 'text-gray-400'}`}>{player.evilWinrate}%</span>
+                          </td>
+                          <td className="py-3 px-4 text-center text-gray-300 font-mono">{player.goodGames}</td>
+                          <td className="py-3 px-4 text-center text-gray-300 font-mono">{player.evilGames}</td>
+                          <td className="py-3 px-4 text-center text-purple-300 font-mono">{player.storytellerGames}</td>
+                        </tr>
+                      );
+                    })}
+                    {leaderboardData.length === 0 && (
+                      <tr><td colSpan={10} className="py-12 text-center text-gray-400">Keine Spieler gefunden mit den aktuellen Filtern.</td></tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
             </div>
+
+            {/* Summary Cards */}
+            {leaderboardData.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                {[
+                  { label: 'Höchste Winrate', icon: <Award size={20} className="text-yellow-400" />, val: `${leaderboardData.sort((a,b)=>b.winrate-a.winrate)[0]?.name}: ${leaderboardData[0]?.winrate}%`, color: 'yellow' },
+                  { label: 'Meiste Spiele', icon: <TrendingUp size={20} className="text-purple-400" />, val: `${[...leaderboardData].sort((a,b)=>b.total-a.total)[0]?.name}: ${[...leaderboardData].sort((a,b)=>b.total-a.total)[0]?.total}`, color: 'purple' },
+                  { label: 'Bester Gut-Spieler', icon: <Heart size={20} className="text-blue-400" />, val: (() => { const p = [...leaderboardData].filter(x=>x.goodGames>0).sort((a,b)=>b.goodWinrate-a.goodWinrate)[0]; return p ? `${p.name}: ${p.goodWinrate}%` : 'N/A'; })(), color: 'blue' },
+                  { label: 'Bester Böse-Spieler', icon: <Skull size={20} className="text-red-400" />, val: (() => { const p = [...leaderboardData].filter(x=>x.evilGames>0).sort((a,b)=>b.evilWinrate-a.evilWinrate)[0]; return p ? `${p.name}: ${p.evilWinrate}%` : 'N/A'; })(), color: 'red' },
+                ].map((card, i) => (
+                  <div key={i} className="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                    <div className="flex items-center gap-2 mb-2">{card.icon}<span className="text-xs text-gray-400">{card.label}</span></div>
+                    <p className="font-semibold text-sm text-white">{card.val}</p>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {!selectedPlayer && (
-          <div className="text-center py-12 text-gray-400">
-            <p className="text-lg">Wähle einen Spieler aus, um die Statistiken anzuzeigen</p>
+        {/* ======================== PLAYER DETAIL PAGE ======================== */}
+        {activePage === 'player' && (
+          <div>
+            <div className="mb-8">
+              <div className="relative">
+                <Search className="absolute left-4 top-3.5 text-gray-400" size={20} />
+                <input type="text" placeholder="Spielername suchen..."
+                  className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
+                  value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+              </div>
+              <div className="mt-3 flex gap-2 flex-wrap">
+                {(searchQuery ? filteredPlayers : availablePlayers).slice(0, 10).map(player => (
+                  <button key={player.id} onClick={() => handlePlayerClick(player.name)}
+                    className={`px-3 py-1.5 rounded-lg text-sm transition-all ${selectedPlayer?.name === player.name ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-800 hover:bg-gray-700'}`}>
+                    {player.avatar} {player.name}
+                  </button>
+                ))}
+                {searchQuery && filteredPlayers.length > 10 && <span className="px-3 py-1.5 text-sm text-gray-400">+{filteredPlayers.length - 10} weitere...</span>}
+              </div>
+            </div>
+
+            {selectedPlayer && playerStats && (
+              <div>
+                {/* Year filter - always visible */}
+                <div className="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
+                  <div className="flex items-center gap-3 mb-3"><Calendar size={20} className="text-purple-400" /><h3 className="font-semibold">Jahr</h3></div>
+                  <div className="flex gap-2 flex-wrap">
+                    <button onClick={() => setSelectedSeason('all')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle Jahre</button>
+                    {getAvailableYears().map(year => (
+                      <button key={year} onClick={() => setSelectedSeason(year)} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === year ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{year}</button>
+                    ))}
+                  </div>
+                </div>
+                {getAvailableScripts().length > 1 && (
+                  <div className="bg-gray-800 rounded-lg p-4 mb-6 border border-gray-700">
+                    <div className="flex items-center gap-3 mb-3"><Scroll size={20} className="text-purple-400" /><h3 className="font-semibold">Script Filter</h3></div>
+                    <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => setSelectedScript('all')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedScript === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle Scripts</button>
+                      {getAvailableScripts().map(script => (
+                        <button key={script} onClick={() => setSelectedScript(script)} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedScript === script ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{script}</button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-gradient-to-r from-purple-800 to-pink-800 rounded-lg p-6 mb-6 shadow-xl">
+                  <div className="flex items-center gap-4">
+                    <div className="text-6xl">{selectedPlayer.avatar}</div>
+                    <div>
+                      <h2 className="text-3xl font-bold">{selectedPlayer.name}</h2>
+                      <p className="text-purple-200">{playerStats.total} Spiele gespielt • {playerStats.storytellerGames} als Storyteller</p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  {[
+                    { icon: <Award className="text-yellow-400" size={24} />, title: 'Gesamt Winrate', val: `${playerStats.winrate}%`, sub: `${playerStats.wins}S / ${playerStats.total - playerStats.wins}N`, color: 'yellow' },
+                    { icon: <Skull className="text-red-400" size={24} />, title: 'Böse Winrate', val: `${playerStats.evilWinrate}%`, sub: `${playerStats.evilGames} Spiele`, color: 'red' },
+                    { icon: <Heart className="text-blue-400" size={24} />, title: 'Gut Winrate', val: `${playerStats.goodWinrate}%`, sub: `${playerStats.goodGames} Spiele`, color: 'blue' },
+                    { icon: <BookOpen className="text-purple-400" size={24} />, title: 'Storyteller', val: playerStats.storytellerGames, sub: 'Spiele geleitet', color: 'purple' },
+                  ].map((card, i) => (
+                    <div key={i} className={`bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-${card.color}-500 transition-colors`}>
+                      <div className="flex items-center gap-3 mb-2">{card.icon}<h3 className="text-lg font-semibold">{card.title}</h3></div>
+                      <p className={`text-3xl font-bold text-${card.color}-400`}>{card.val}</p>
+                      <p className="text-gray-400 text-sm">{card.sub}</p>
+                    </div>
+                  ))}
+                </div>
+
+                {playerStats.radarData && playerStats.radarData.length >= 2 && (
+                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+                    <h3 className="text-xl font-bold mb-1 flex items-center gap-2">
+                      <span className="text-purple-400">🕸️</span> Rollen-Kategorien
+                    </h3>
+                    <p className="text-gray-400 text-sm mb-6">Winrate pro Rollen-Kategorie — je weiter außen, desto besser</p>
+                    <div className="flex flex-col lg:flex-row gap-6 items-center">
+                      <div className="w-full lg:w-1/2" style={{height: 320}}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <RadarChart data={playerStats.radarData} margin={{top: 10, right: 30, bottom: 10, left: 30}}>
+                            <PolarGrid stroke="#374151" />
+                            <PolarAngleAxis
+                              dataKey="category"
+                              tick={({ x, y, payload, cx, cy }) => {
+                                const cat = playerStats.radarData.find(d => d.category === payload.value);
+                                return (
+                                  <text x={x} y={y} textAnchor={x > cx + 5 ? "start" : x < cx - 5 ? "end" : "middle"} dominantBaseline="central" fill={cat ? cat.color : "#9ca3af"} fontSize={12} fontWeight={600}>
+                                    {cat ? cat.emoji + " " + payload.value : payload.value}
+                                  </text>
+                                );
+                              }}
+                            />
+                            <PolarRadiusAxis angle={90} domain={[0, 100]} tick={false} axisLine={false} />
+                            <Radar
+                              dataKey="winrate"
+                              stroke="#a855f7"
+                              fill="#a855f7"
+                              fillOpacity={0.25}
+                              strokeWidth={2}
+                            />
+                            <Tooltip
+                              contentStyle={{ backgroundColor: "#1f2937", border: "1px solid #374151", borderRadius: 8 }}
+                              formatter={(val, _name, props) => {
+                                const d = props.payload;
+                                return [`${val}%  (${d.wins}S / ${d.games - d.wins}N, ${d.games} Sp.)`, d.emoji + " " + d.category];
+                              }}
+                              labelFormatter={() => ""}
+                            />
+                          </RadarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="w-full lg:w-1/2 grid grid-cols-2 gap-3">
+                        {playerStats.radarData.map((d, i) => (
+                          <div key={i}
+                            onClick={() => setSelectedCategory(selectedCategory === d.category ? null : d.category)}
+                            className={`rounded-lg p-3 flex flex-col gap-1 cursor-pointer transition-all ${selectedCategory === d.category ? "ring-2 ring-white bg-gray-600" : "bg-gray-700 hover:bg-gray-600"}`}
+                            style={{borderLeft: `3px solid ${d.color}`}}>
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-semibold text-white">{d.emoji} {d.category}</span>
+                              <div className="flex items-center gap-2">
+                                {selectedCategory === d.category && <span className="text-xs bg-white text-gray-900 px-1.5 py-0.5 rounded font-bold">Aktiv</span>}
+                                <span className="text-lg font-bold" style={{color: d.winrate >= 50 ? "#4ade80" : "#f87171"}}>{d.winrate}%</span>
+                              </div>
+                            </div>
+                            <div className="text-xs text-gray-400">{d.wins}S / {d.games - d.wins}N • {d.games} Spiele</div>
+                            <div className="w-full bg-gray-600 rounded-full h-1.5 mt-1">
+                              <div className="h-1.5 rounded-full" style={{width: `${d.winrate}%`, backgroundColor: d.color, opacity: 0.8}} />
+                            </div>
+                            <div className="text-xs text-gray-500 mt-0.5">Klicken zum Filtern ↓</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {playerStats.roleStats.length > 0 && (
+                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><Users size={24} className="text-purple-400" />Rollen-Statistiken</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead><tr className="border-b border-gray-700">
+                          <th className="text-left py-2 px-2">Rolle</th><th className="text-center py-2 px-2">Spiele</th><th className="text-center py-2 px-2">Siege</th><th className="text-center py-2 px-2">Winrate</th>
+                        </tr></thead>
+                        <tbody>
+                          {playerStats.roleStats.map((stat, idx) => (
+                            <tr key={idx} className="border-b border-gray-700 hover:bg-gray-750">
+                              <td className="py-3 px-2 font-medium">{stat.role}</td>
+                              <td className="text-center py-3 px-2">{stat.games}</td>
+                              <td className="text-center py-3 px-2">{stat.wins}</td>
+                              <td className="text-center py-3 px-2"><span className={`font-bold ${parseFloat(stat.winrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>{stat.winrate}%</span></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+
+                {playerStats.teammateStats.length > 0 && (
+                  <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-6">
+                    <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><UserCheck size={24} className="text-purple-400" />Mitspieler-Statistiken</h3>
+                    <p className="text-gray-400 text-sm mb-4">{playerStats.teammateStats.length} Spieler • Klicke auf einen Spieler um die Match History zu filtern</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {playerStats.teammateStats.map((teammate, idx) => (
+                        <div key={idx}
+                          className={`p-4 rounded-lg cursor-pointer transition-all ${selectedTeammate === teammate.name ? 'bg-purple-700 border-2 border-purple-400' : 'bg-gray-700 hover:bg-gray-600 border-2 border-transparent'}`}
+                          onClick={() => setSelectedTeammate(selectedTeammate === teammate.name ? null : teammate.name)}>
+                          <div className="flex items-center justify-between mb-3">
+                            <span className="font-semibold text-lg">{teammate.name}</span>
+                            <span className="text-xs text-gray-400">{teammate.total} Spiele gesamt</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            {/* Selbes Team */}
+                            <div className={`rounded-lg p-2.5 ${teammate.sameTeam > 0 ? 'bg-blue-900 bg-opacity-40' : 'bg-gray-800 bg-opacity-50'}`}>
+                              <div className="text-xs text-blue-300 font-medium mb-1">🤝 Selbes Team</div>
+                              {teammate.sameTeam > 0 ? (
+                                <>
+                                  <div className={`text-xl font-bold ${parseFloat(teammate.winrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>{teammate.winrate}%</div>
+                                  <div className="text-xs text-gray-400 mt-0.5">{teammate.sameTeamWins}S / {teammate.sameTeam - teammate.sameTeamWins}N ({teammate.sameTeam} Sp.)</div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-gray-500 mt-1">Keine Spiele</div>
+                              )}
+                            </div>
+                            {/* Gegnerisches Team */}
+                            <div className={`rounded-lg p-2.5 ${teammate.oppTeam > 0 ? 'bg-red-900 bg-opacity-40' : 'bg-gray-800 bg-opacity-50'}`}>
+                              <div className="text-xs text-red-300 font-medium mb-1">⚔️ Gegner</div>
+                              {teammate.oppTeam > 0 ? (
+                                <>
+                                  <div className={`text-xl font-bold ${parseFloat(teammate.oppWinrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>{teammate.oppWinrate}%</div>
+                                  <div className="text-xs text-gray-400 mt-0.5">{teammate.oppTeamWins}S / {teammate.oppTeam - teammate.oppTeamWins}N ({teammate.oppTeam} Sp.)</div>
+                                </>
+                              ) : (
+                                <div className="text-xs text-gray-500 mt-1">Keine Spiele</div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="bg-gray-800 rounded-lg p-6 border border-gray-700">
+                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <TrendingUp size={24} className="text-purple-400" />Match History
+                    {selectedTeammate && <span className="text-sm font-normal text-purple-300 ml-2">(gefiltert: mit {selectedTeammate} im selben Team)</span>}
+                    {selectedCategory && <span className="text-sm font-normal text-purple-300 ml-2">(gefiltert: Kategorie {selectedCategory})</span>}
+                  </h3>
+                  <div className="space-y-2">
+                    {matches.filter(match => {
+                      const matchYear = match.date ? match.date.substring(0, 4) : match.season;
+                      const seasonMatch = selectedSeason === 'all' || matchYear === selectedSeason;
+                      const scriptMatch = selectedScript === 'all' || match.script === selectedScript;
+                      // Kategorie-Filter
+                      const categoryMatch = !selectedCategory || getRoleCategory(match.role) === Object.keys(CATEGORY_DISPLAY).find(k => CATEGORY_DISPLAY[k].label === selectedCategory);
+                      let teammateMatch = true;
+                      if (selectedTeammate) {
+                        if (match.role === 'Storyteller') {
+                          teammateMatch = false;
+                        } else {
+                          const fullMatch = getAllMatches().find(m => m.id === match.id);
+                          if (fullMatch) {
+                            const cpd = fullMatch.players.find(p => p.name === selectedPlayer.name);
+                            const td = fullMatch.players.find(p => p.name === selectedTeammate);
+                            teammateMatch = !!(td && cpd && td.team === cpd.team);
+                          } else {
+                            teammateMatch = false;
+                          }
+                        }
+                      }
+                      return seasonMatch && scriptMatch && teammateMatch && categoryMatch;
+                    }).map((match) => {
+                      const fullMatch = getAllMatches().find(m => m.id === match.id);
+                      return (
+                        <div key={match.id}>
+                          <div
+                            className={`p-4 rounded-lg border-l-4 cursor-pointer transition-all ${match.role === 'Storyteller' ? 'bg-purple-900 bg-opacity-20 border-purple-500 hover:bg-opacity-30' : match.result === 'Sieg' ? 'bg-green-900 bg-opacity-20 border-green-500 hover:bg-opacity-30' : 'bg-red-900 bg-opacity-20 border-red-500 hover:bg-opacity-30'}`}
+                            onClick={() => setExpandedMatch(expandedMatch === match.id ? null : match.id)}>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-4">
+                                {match.role === 'Storyteller' ? (
+                                  <><span className="font-bold text-purple-400">Storyteller</span><BookOpen size={20} className="text-purple-400" /></>
+                                ) : (
+                                  <><span className={`font-bold ${match.result === 'Sieg' ? 'text-green-400' : 'text-red-400'}`}>{match.result}</span>
+                                  <span className="font-semibold text-lg">{match.role}</span>
+                                  <span className={`px-3 py-1 rounded-full text-sm ${match.team === 'Böse' ? 'bg-red-600 bg-opacity-50' : 'bg-blue-600 bg-opacity-50'}`}>{match.team}</span></>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-4">
+                                <div className="text-gray-400 text-sm"><span className="mr-4">{match.script}</span><span>{match.date}</span></div>
+                                {expandedMatch === match.id ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
+                              </div>
+                            </div>
+                          </div>
+                          {expandedMatch === match.id && fullMatch && (
+                            <div className="mt-2 bg-gray-900 bg-opacity-50 rounded-lg p-4 border border-gray-700">
+                              <div className="mb-4 pb-3 border-b border-gray-700">
+                                <div className="flex items-center gap-2"><BookOpen size={18} className="text-purple-400" /><span className="text-gray-400">Storyteller:</span><span className="font-semibold text-purple-300">{fullMatch.storyteller}</span></div>
+                              </div>
+                              <h4 className="font-semibold mb-3 text-purple-300">Spieler in diesem Match:</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                {fullMatch.players.map((player, idx2) => (
+                                  <div key={idx2} onClick={() => handlePlayerClick(player.name)}
+                                    className={`p-3 rounded-lg flex items-center justify-between cursor-pointer transition-all ${player.name === selectedPlayer.name ? 'bg-purple-900 bg-opacity-40 border border-purple-500' : 'bg-gray-700 hover:bg-gray-600 border border-transparent'}`}>
+                                    <div className="flex items-center gap-3">
+                                      <span className="font-medium text-white hover:text-purple-300">{player.name}</span>
+                                      <span className={`text-xs px-2 py-1 rounded ${player.team === 'Böse' ? 'bg-red-700 bg-opacity-60 text-red-200' : 'bg-blue-700 bg-opacity-60 text-blue-200'}`}>{player.role}</span>
+                                    </div>
+                                    <span className={`text-xs ${player.alive ? 'text-green-400' : 'text-gray-500'}`}>{player.alive ? '✓ Lebt' : '✗ Tot'}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {!selectedPlayer && (
+              <div className="text-center py-12 text-gray-400">
+                <p className="text-lg">Wähle einen Spieler aus, um die Statistiken anzuzeigen</p>
+              </div>
+            )}
           </div>
         )}
       </div>
