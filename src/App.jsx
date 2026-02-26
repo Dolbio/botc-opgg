@@ -272,7 +272,7 @@ const BotCStatsTracker = () => {
 
     return {
       total, wins, winrate,
-      evilGames: evilMatches.length, goodGames: goodMatches.length, evilWinrate, goodWinrate,
+      evilGames: evilMatches.length, evilWins, goodGames: goodMatches.length, goodWins, evilWinrate, goodWinrate,
       roleStats, storytellerGames: stGames.length, radarData,
       teammateStats: Object.values(teammateStats).map(t => ({
         ...t,
@@ -716,8 +716,8 @@ const BotCStatsTracker = () => {
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                   {[
                     { icon: <Award className="text-yellow-400" size={24} />, title: 'Gesamt Winrate', val: `${playerStats.winrate}%`, sub: `${playerStats.wins}S / ${playerStats.total - playerStats.wins}N`, color: 'yellow' },
-                    { icon: <Skull className="text-red-400" size={24} />, title: 'Böse Winrate', val: `${playerStats.evilWinrate}%`, sub: `${playerStats.evilGames} Spiele`, color: 'red' },
-                    { icon: <Heart className="text-blue-400" size={24} />, title: 'Gut Winrate', val: `${playerStats.goodWinrate}%`, sub: `${playerStats.goodGames} Spiele`, color: 'blue' },
+                    { icon: <Skull className="text-red-400" size={24} />, title: 'Böse Winrate', val: `${playerStats.evilWinrate}%`, sub: `${playerStats.evilWins}S / ${playerStats.evilGames - playerStats.evilWins}N`, color: 'red' },
+                    { icon: <Heart className="text-blue-400" size={24} />, title: 'Gut Winrate', val: `${playerStats.goodWinrate}%`, sub: `${playerStats.goodWins}S / ${playerStats.goodGames - playerStats.goodWins}N`, color: 'blue' },
                     { icon: <BookOpen className="text-purple-400" size={24} />, title: 'Storyteller', val: playerStats.storytellerGames, sub: 'Spiele geleitet', color: 'purple' },
                   ].map((card, i) => (
                     <div key={i} className={`bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-${card.color}-500 transition-colors`}>
