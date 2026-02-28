@@ -119,10 +119,18 @@ const BotCStatsTracker = () => {
     const lines = rawText.trim().split('\n').filter(l => l.trim());
     if (lines.length < 2) return [];
     const gameData = {};
+    // Case-insensitive name registry: lowercase -> canonical first-seen name
+    const nameRegistry = {};
+    const canonicalName = (name) => {
+      const key = name.toLowerCase().trim();
+      if (!nameRegistry[key]) nameRegistry[key] = name.trim();
+      return nameRegistry[key];
+    };
     for (let i = 1; i < lines.length; i++) {
       const values = lines[i].split('\t');
       if (values.length < 7) continue;
-      const gameId = values[0].trim(), dateStr = values[1].trim(), playerName = values[2].trim();
+      const gameId = values[0].trim(), dateStr = values[1].trim();
+      const playerName = canonicalName(values[2]);
       const role = values[3].trim(), resultStr = values[4].trim(), scriptShort = values[5].trim(), teamStr = values[6].trim();
       if (!gameId || !playerName || !role) continue;
       const result = resultStr.toLowerCase() === 'win' ? 'Sieg' : 'Niederlage';
@@ -221,11 +229,18 @@ const BotCStatsTracker = () => {
       const lines = data.trim().split('\n').filter(line => line.trim());
       if (lines.length < 2) { setImportError('Keine gültigen Daten gefunden.'); return; }
       const gameData = {};
+      const nameRegistry = {};
+      const canonicalName = (name) => {
+        const key = name.toLowerCase().trim();
+        if (!nameRegistry[key]) nameRegistry[key] = name.trim();
+        return nameRegistry[key];
+      };
       let parsedCount = 0, skippedCount = 0;
       for (let i = 1; i < lines.length; i++) {
         const values = lines[i].split('\t');
         if (values.length < 7) { skippedCount++; continue; }
-        const gameId = values[0].trim(), dateStr = values[1].trim(), playerName = values[2].trim();
+        const gameId = values[0].trim(), dateStr = values[1].trim();
+        const playerName = canonicalName(values[2]);
         const role = values[3].trim(), resultStr = values[4].trim(), scriptShort = values[5].trim(), teamStr = values[6].trim();
         if (!gameId || !playerName || !role) { skippedCount++; continue; }
         const result = resultStr.toLowerCase() === 'win' ? 'Sieg' : 'Niederlage';
