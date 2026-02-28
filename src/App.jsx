@@ -3,9 +3,8 @@ import { Search, TrendingUp, Users, Award, Skull, Heart, ChevronDown, ChevronUp,
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 
 const ROLE_CATEGORIES = {
-  Info: ['Washerwoman','Librarian','Investigator','Chef','Empath','Fortune Teller','Undertaker','Ravenkeeper','Flowergirl','Town Crier','Oracle','Seamstress','Mathematician','Clockmaker','Dreamer','Balloonist','Juggler','Savant','Artist','Bounty Hunter','Poppy Grower','Gossip','General','Chambermaid','Pixie','Amnesiac','King','Shugenja','Sage','Village Idiot','Fisherman','Vizier','Alchemist','Cannibal','Huntsman','Grandmother','Gambler','Snake Charmer','Philosopher'],
-  Schutz: ['Monk','Sailor','Innkeeper','Minstrel','Tea Lady','Pacifist','Fool','Soldier','Lycanthrope','Nightwatchman','Professor','Bodyguard','Noble','Farmer','Acrobat','Mayor'],
-  Aktiv: ['Slayer','Virgin','Golem','Gunslinger','Banshee','High Priestess','Magician','Puzzlemaster','Exorcist','Courtier'],
+  Info: ['Washerwoman','Librarian','Investigator','Chef','Empath','Fortune Teller','Undertaker','Ravenkeeper','Flowergirl','Town Crier','Oracle','Seamstress','Mathematician','Clockmaker','Dreamer','Balloonist','Juggler','Savant','Artist','Bounty Hunter','Poppy Grower','Gossip','General','Chambermaid','Pixie','Amnesiac','King','Shugenja','Sage','Village Idiot','Fisherman','Vizier','Alchemist','Cannibal','Huntsman','Grandmother','Gambler','Snake Charmer','Philosopher','Slayer','Virgin'],
+  Schutz: ['Monk','Sailor','Innkeeper','Minstrel','Tea Lady','Pacifist','Fool','Soldier','Lycanthrope','Nightwatchman','Professor','Bodyguard','Noble','Farmer','Acrobat','Mayor','Exorcist','Courtier'],
   Aussenseiter: ['Drunk','Recluse','Saint','Butler','Lunatic','Mutant','Barber','Moonchild','Goon','Damsel','Plague Doctor','Snitch','Politician','Zealot','Sweetheart','Klutz','Tinker'],
   Minion: ['Poisoner','Spy','Scarlet Woman','Baron','Godfather','Assassin','Mastermind','Evil Twin','Witch','Cerenovus','Pit-Hag','Mezepheles','Psychopath','Organ Grinder','Marionette','Harpy','Fearmonger','Summoner',"Devil's Advocate"],
   Daemon: ['Imp','Zombuul','Pukka','Shabaloth','Po','Vigormortis','No Dashii','Vortox','Fang Gu','Al-Hadikhia','Leviathan','Ojo','Kazali','Yaggababble','Lleech'],
@@ -14,7 +13,6 @@ const ROLE_CATEGORIES = {
 const CATEGORY_DISPLAY = {
   Info:         { label: 'Info',         color: '#60a5fa', emoji: '🔍' },
   Schutz:       { label: 'Schutz',       color: '#34d399', emoji: '🛡️' },
-  Aktiv:        { label: 'Aktiv/Kill',   color: '#fbbf24', emoji: '⚡' },
   Aussenseiter: { label: 'Außenseiter',  color: '#a78bfa', emoji: '🎭' },
   Minion:       { label: 'Böse Support', color: '#f87171', emoji: '🗡️' },
   Daemon:       { label: 'Dämon',        color: '#fb7185', emoji: '😈' },
