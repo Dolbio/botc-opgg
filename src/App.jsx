@@ -112,21 +112,75 @@ const BotCStatsTracker = () => {
     }
   ];
 
-  useEffect(() => { loadSavedData(); }, []);
+  useEffect(() => { loadData(); }, []);
 
-  const loadSavedData = () => {
+  const parseTxtToMatches = (rawText) => {
+    const lines = rawText.trim().split('\n').filter(l => l.trim());
+    if (lines.length < 2) return [];
+    const gameData = {};
+    for (let i = 1; i < lines.length; i++) {
+      const values = lines[i].split('\t');
+      if (values.length < 7) continue;
+      const gameId = values[0].trim(), dateStr = values[1].trim(), playerName = values[2].trim();
+      const role = values[3].trim(), resultStr = values[4].trim(), scriptShort = values[5].trim(), teamStr = values[6].trim();
+      if (!gameId || !playerName || !role) continue;
+      const result = resultStr.toLowerCase() === 'win' ? 'Sieg' : 'Niederlage';
+      const team = teamStr.toLowerCase() === 'good' ? 'Gut' : 'Böse';
+      const dateParts = dateStr.split('/');
+      const formattedDate = dateParts.length === 3
+        ? `${dateParts[2]}-${dateParts[1].padStart(2,'0')}-${dateParts[0].padStart(2,'0')}`
+        : dateStr;
+      const scriptMap = { 'S&V': 'Sects and Violets', 'TB': 'Trouble Brewing', 'BMR': 'Bad Moon Rising' };
+      const script = scriptMap[scriptShort] || scriptShort;
+      if (!gameData[gameId]) {
+        gameData[gameId] = { id: parseInt(gameId) || 0, date: formattedDate, season: dateParts.length === 3 ? dateParts[2] : '2025', script, storyteller: 'Unknown', players: [] };
+      }
+      gameData[gameId].players.push({ name: playerName, role, team, alive: true, result });
+    }
+    return Object.values(gameData);
+  };
+
+  const loadData = async () => {
+    setIsLoading(true);
     try {
-      setIsLoading(true);
+      // Try to load from games.txt first
+      const res = await fetch('./games.txt?t=' + Date.now());
+      if (res.ok) {
+        const text = await res.text();
+        const matches = parseTxtToMatches(text);
+        if (matches.length > 0) {
+          setImportedMatches(matches);
+          const uniquePlayers = new Set();
+          matches.forEach(m => m.players.forEach(p => uniquePlayers.add(p.name)));
+          setAvailablePlayers(Array.from(uniquePlayers).sort().map((name, idx) => ({ id: idx+1, name, avatar: '👤' })));
+          setLastImportDate('games.txt (' + matches.length + ' Spiele)');
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      // games.txt not found, fall through to localStorage
+    }
+    // Fallback: localStorage
+    try {
       const savedMatches = localStorage.getItem('botc-matches');
       const savedDate = localStorage.getItem('botc-import-date');
-      if (savedMatches) { setImportedMatches(JSON.parse(savedMatches)); }
-      if (savedDate) { setLastImportDate(savedDate); }
+      if (savedMatches) {
+        const matches = JSON.parse(savedMatches);
+        setImportedMatches(matches);
+        const uniquePlayers = new Set();
+        matches.forEach(m => m.players.forEach(p => uniquePlayers.add(p.name)));
+        setAvailablePlayers(Array.from(uniquePlayers).sort().map((name, idx) => ({ id: idx+1, name, avatar: '👤' })));
+      }
+      if (savedDate) setLastImportDate(savedDate);
     } catch (error) {
       console.log('Fehler beim Laden:', error);
     } finally {
       setIsLoading(false);
     }
   };
+
+  const loadSavedData = () => { loadData(); };
 
   const saveMatchesToStorage = (matchesArray) => {
     try {
@@ -983,18 +1037,15 @@ const BotCStatsTracker = () => {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
               🕐 Blood on the Clocktower Stats
             </h1>
-            <button onClick={() => setShowImport(true)} className="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg font-semibold transition-colors flex items-center gap-2">
-              <Upload size={18} />Spiele importieren
-            </button>
           </div>
           <p className="text-gray-400">Verfolge deine Spielerstatistiken und Erfolge</p>
           {importedMatches.length > 0 ? (
             <div className="flex items-center gap-4 mt-2">
-              <p className="text-sm text-purple-300">✓ {importedMatches.length} gespeicherte Spiele geladen</p>
-              {lastImportDate && <p className="text-xs text-gray-400">Letzter Import: {lastImportDate}</p>}
+              <p className="text-sm text-purple-300">✓ {importedMatches.length} Spiele geladen</p>
+              {lastImportDate && <p className="text-xs text-gray-400">{lastImportDate}</p>}
             </div>
           ) : (
-            <p className="text-sm text-yellow-300 mt-1">⚠️ Demo-Modus aktiv - Importiere deine Spiele, um sie dauerhaft zu speichern</p>
+            <p className="text-sm text-yellow-300 mt-1">⚠️ Keine Spieldaten gefunden — bitte <code className="bg-gray-800 px-1 rounded">games.txt</code> im selben Ordner ablegen.</p>
           )}
         </div>
 

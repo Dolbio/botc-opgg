@@ -1,0 +1,309 @@
+Spiel #	Datum	Name	Rolle	Win / Lose	Set	Team
+1	14/03/2025	Hung	Mutant	Lose	S&V	Good
+1	14/03/2025	Chi	Klutz	Lose	S&V	Good
+1	14/03/2025	Cuong	Clockmaker	Lose	S&V	Good
+1	14/03/2025	Johnny	Artist	Lose	S&V	Good
+1	14/03/2025	Man Kit	Seamstress	Lose	S&V	Good
+1	14/03/2025	Karl-Thomas	Sage	Lose	S&V	Good
+1	14/03/2025	Diep	Vortox	Win	S&V	Evil
+1	14/03/2025	Deniz	Pit-Hag	Win	S&V	Evil
+1	14/03/2025	Angie	Barber	Lose	S&V	Good
+1	14/03/2025	Bao	Witch	Win	S&V	Evil
+1	14/03/2025	Diem	Oracle	Lose	S&V	Good
+1	14/03/2025	Binh	Dreamer	Lose	S&V	Good
+2	14/03/2025	Hung	Fang Gu	Lose	S&V	Evil
+2	14/03/2025	Chi	Flowergirl	Win	S&V	Good
+2	14/03/2025	Cuong	Seamstress	Win	S&V	Good
+2	14/03/2025	Johnny	Snake Charmer	Win	S&V	Good
+2	14/03/2025	Man Kit	Barber	Win	S&V	Good
+2	14/03/2025	Karl-Thomas	Pit-Hag	Lose	S&V	Evil
+2	14/03/2025	Diep	Philosopher	Win	S&V	Good
+2	14/03/2025	Deniz	Fang Gu	Lose	S&V	Evil
+2	14/03/2025	Angie	Savant	Win	S&V	Good
+2	14/03/2025	Bao	Oracle	Win	S&V	Good
+2	14/03/2025	Diem	Evil Twin	Lose	S&V	Evil
+2	14/03/2025	Binh	Witch	Lose	S&V	Evil
+2	14/03/2025	Vinh	Sage	Win	S&V	Good
+3	14/03/2025	Hung	Philosopher	Win	S&V	Good
+3	14/03/2025	Chi	Artist	Win	S&V	Good
+3	14/03/2025	Cuong	Sage	Win	S&V	Good
+3	14/03/2025	Johnny	Snake Charmer	Win	S&V	Good
+3	14/03/2025	Man Kit	Juggler	Win	S&V	Good
+3	14/03/2025	Karl-Thomas	Clockmaker	Win	S&V	Good
+3	14/03/2025	Diep	Dreamer	Win	S&V	Good
+3	14/03/2025	Deniz	Seamstress	Win	S&V	Good
+3	14/03/2025	Angie	Barber	Win	S&V	Good
+3	14/03/2025	Bao	Pit-Hag	Lose	S&V	Evil
+3	14/03/2025	Diem	Vortox	Lose	S&V	Evil
+3	14/03/2025	Binh	Town Crier	Win	S&V	Good
+3	14/03/2025	Vinh	Cerenovus	Lose	S&V	Evil
+3	14/03/2025	Khoa	Witch	Lose	S&V	Evil
+4	30/03/2025	Diem	Monk	Win	TB	Good
+4	30/03/2025	Binh	Imp	Lose	TB	Evil
+4	30/03/2025	Hung	Fortune Teller	Win	TB	Good
+4	30/03/2025	Thi	Poisoner	Lose	TB	Evil
+4	30/03/2025	Vinh	Chef	Win	TB	Good
+4	30/03/2025	Thu	Drunk	Win	TB	Good
+4	30/03/2025	Lukas	Empath	Win	TB	Good
+4	30/03/2025	Oanh	Investigator	Win	TB	Good
+4	30/03/2025	Johnny	Recluse	Win	TB	Good
+5	30/03/2025	Diem	Poisoner	Win	TB	Evil
+5	30/03/2025	Lukas	Ravenkeeper	Lose	TB	Good
+5	30/03/2025	Hung	Imp	Win	TB	Evil
+5	30/03/2025	Thi	Washerwoman	Lose	TB	Good
+5	30/03/2025	Vinh	Fortune Teller	Lose	TB	Good
+5	30/03/2025	Diep	Scarlet Woman	Win	TB	Evil
+5	30/03/2025	Khang	Soldier	Lose	TB	Good
+5	30/03/2025	Thu	Virgin	Lose	TB	Good
+5	30/03/2025	Binh	Slayer	Lose	TB	Good
+5	30/03/2025	Oanh	Librarian	Lose	TB	Good
+6	30/03/2025	Diem	Mayor	Win	TB	Good
+6	30/03/2025	Khoa	Imp	Lose	TB	Evil
+6	30/03/2025	Diep	Recluse	Win	TB	Good
+6	30/03/2025	Thu	Drunk	Win	TB	Good
+6	30/03/2025	Thi	Investigator	Win	TB	Good
+6	30/03/2025	Vinh	Fortune Teller	Win	TB	Good
+6	30/03/2025	Lukas	Slayer	Win	TB	Good
+6	30/03/2025	Hung	Baron	Lose	TB	Evil
+6	30/03/2025	Johnny	Empath	Win	TB	Good
+6	30/03/2025	Oanh	Scarlet Woman	Lose	TB	Evil
+7	30/03/2025	Diem	Mayor	Lose	TB	Good
+7	30/03/2025	Khang	Poisoner	Win	TB	Evil
+7	30/03/2025	Thu	Chef	Lose	TB	Good
+7	30/03/2025	Johnny	Empath	Lose	TB	Good
+7	30/03/2025	Vinh	Ravenkeeper	Lose	TB	Good
+7	30/03/2025	Thi	Undertaker	Lose	TB	Good
+7	30/03/2025	Lukas	Scarlet Woman	Win	TB	Evil
+7	30/03/2025	Hung	Washerwoman	Lose	TB	Good
+7	30/03/2025	Binh	Monk	Lose	TB	Good
+7	30/03/2025	Oanh	Imp	Win	TB	Evil
+8	30/03/2025	Hung	Fortune Teller	Lose	TB	Good
+8	30/03/2025	Khang	Mayor	Lose	TB	Good
+8	30/03/2025	Thu	Imp	Win	TB	Evil
+8	30/03/2025	Johnny	Poisoner	Win	TB	Evil
+8	30/03/2025	Thi	Monk	Lose	TB	Good
+8	30/03/2025	Vinh	Ravenkeeper	Lose	TB	Good
+8	30/03/2025	Diep	Chef	Lose	TB	Good
+8	30/03/2025	Oanh	Drunk	Lose	TB	Good
+9	12/04/2025	Hung	Witch	Lose	S&V	Evil
+9	12/04/2025	Khoa	Seamstress	Win	S&V	Good
+9	12/04/2025	Johnny	Snake Charmer	Win	S&V	Good
+9	12/04/2025	Thi	Vigormortis	Lose	S&V	Evil
+9	12/04/2025	Man Kit	Philosopher	Win	S&V	Good
+9	12/04/2025	Carl	Oracle	Win	S&V	Good
+9	12/04/2025	Diep	Flowergirl	Win	S&V	Good
+9	12/04/2025	Diem	Artist	Win	S&V	Good
+10	12/04/2025	Hung	Seamstress	Lose	S&V	Good
+10	12/04/2025	Khoa	Savant	Lose	S&V	Good
+10	12/04/2025	Oanh	Pit-Hag	Win	S&V	Evil
+10	12/04/2025	Thi	Klutz	Lose	S&V	Good
+10	12/04/2025	Man Kit	Sage	Lose	S&V	Good
+10	12/04/2025	Johnny	Dreamer	Lose	S&V	Good
+10	12/04/2025	Diep	Philosopher	Lose	S&V	Good
+10	12/04/2025	Diem	No Dashii	Win	S&V	Evil
+11	12/04/2025	Hung	Klutz	Win	S&V	Good
+11	12/04/2025	Khoa	Flowergirl	Win	S&V	Good
+11	12/04/2025	Thi	Snake Charmer	Win	S&V	Good
+11	12/04/2025	Man Kit	Dreamer	Win	S&V	Good
+11	12/04/2025	Khang	Artist	Win	S&V	Good
+11	12/04/2025	Diem	Oracle	Win	S&V	Good
+12	19/04/2025	Man Kit	Dreamer	Lose	S&V	Good
+12	19/04/2025	Diem	Fang Gu	Win	S&V	Evil
+12	19/04/2025	Hung	Clockmaker	Lose	S&V	Good
+12	19/04/2025	Bao	Fang Gu	Win	S&V	Evil
+12	19/04/2025	Johnny	Pit-Hag	Win	S&V	Evil
+12	19/04/2025	Thi	Seamstress	Lose	S&V	Good
+12	19/04/2025	Khoa	Mutant	Lose	S&V	Good
+12	19/04/2025	Diep	Flowergirl	Lose	S&V	Good
+13	19/04/2025	Khang	Artist	Win	S&V	Good
+13	19/04/2025	Diem	Vigormortis	Lose	S&V	Evil
+13	19/04/2025	Hung	Witch	Lose	S&V	Evil
+13	19/04/2025	Bao	Snake Charmer	Win	S&V	Good
+13	19/04/2025	Khoa	Seamstress	Win	S&V	Good
+13	19/04/2025	Thi	Town Crier	Win	S&V	Good
+13	19/04/2025	Man Kit	Sage	Win	S&V	Good
+13	19/04/2025	Diep	Oracle	Win	S&V	Good
+14	19/04/2025	Diep	Empath	Win	TB	Good
+14	19/04/2025	Johnny	Slayer	Win	TB	Good
+14	19/04/2025	Hung	Chef	Win	TB	Good
+14	19/04/2025	Bao	Scarlet Woman	Lose	TB	Evil
+14	19/04/2025	Khoa	Virgin	Win	TB	Good
+14	19/04/2025	Thi	Imp	Lose	TB	Evil
+14	19/04/2025	Man Kit	Fortune Teller	Win	TB	Good
+14	19/04/2025	Gigi	Ravenkeeper	Win	TB	Good
+14	19/04/2025	Lila	Ravenkeeper	Win	TB	Good
+15	19/04/2025	Diep	Monk	Lose	TB	Good
+15	19/04/2025	Diem	Undertaker	Lose	TB	Good
+15	19/04/2025	Johnny	Spy	Win	TB	Evil
+15	19/04/2025	Hung	Scarlet Woman	Win	TB	Evil
+15	19/04/2025	Bao	Empath	Lose	TB	Good
+15	19/04/2025	Khoa	Washerwoman	Lose	TB	Good
+15	19/04/2025	Thi	Imp	Win	TB	Evil
+15	19/04/2025	Man Kit	Slayer	Lose	TB	Good
+15	19/04/2025	Gigi	Virgin	Lose	TB	Good
+15	19/04/2025	Lila	Investigator	Lose	TB	Good
+16	19/04/2025	Diep	Fang Gu	Win	S&V	Evil
+16	19/04/2025	Diem	Artist	Lose	S&V	Good
+16	19/04/2025	Man Kit	Flowergirl	Lose	S&V	Good
+16	19/04/2025	Khang	Philosopher	Lose	S&V	Good
+16	19/04/2025	Bao	Dreamer	Lose	S&V	Good
+16	19/04/2025	Hung	Mutant	Lose	S&V	Good
+16	19/04/2025	Thi	Cerenovus	Win	S&V	Evil
+16	19/04/2025	Khoa	Klutz	Lose	S&V	Good
+17	19/04/2025	Diep	Clockmaker	Win	S&V	Good
+17	19/04/2025	Diem	Philosopher	Win	S&V	Good
+17	19/04/2025	Man Kit	Snake Charmer	Win	S&V	Good
+17	19/04/2025	Bao	Witch	Lose	S&V	Evil
+17	19/04/2025	Hung	Juggler	Win	S&V	Good
+17	19/04/2025	Thi	Savant	Win	S&V	Good
+17	19/04/2025	Khoa	Vigormortis	Lose	S&V	Evil
+17	19/04/2025	Johnny	Flowergirl	Win	S&V	Good
+18	18/05/2025	Phuong Anh	Ravenkeeper	Lose	TB	Good
+18	18/05/2025	Vinh109	Imp	Win	TB	Evil
+18	18/05/2025	Diem	Slayer	Lose	TB	Good
+18	18/05/2025	Bao	Washerwoman	Lose	TB	Good
+18	18/05/2025	Angie	Poisoner	Win	TB	Evil
+18	18/05/2025	Deniz	Soldier	Lose	TB	Good
+18	18/05/2025	Hung	Saint	Lose	TB	Good
+18	18/05/2025	Thi	Fortune Teller	Lose	TB	Good
+18	18/05/2025	Khang	Undertaker	Lose	TB	Good
+19	18/05/2025	Vinh109	Flowergirl	Lose	S&V	Good
+19	18/05/2025	Hung	Oracle	Lose	S&V	Good
+19	18/05/2025	Diem	No Dashii	Win	S&V	Evil
+19	18/05/2025	Diep	Clockmaker	Lose	S&V	Good
+19	18/05/2025	Deniz	Evil Twin	Win	S&V	Evil
+19	18/05/2025	Angie	Juggler	Lose	S&V	Good
+19	18/05/2025	Khoa	Seamstress	Lose	S&V	Good
+19	18/05/2025	Thi	Mathematician	Lose	S&V	Good
+19	18/05/2025	Johnny	Klutz	Lose	S&V	Good
+19	18/05/2025	Bao	Pit-Hag	Win	S&V	Evil
+20	18/05/2025	Vinh109	Vigormortis	Lose	S&V	Evil
+20	18/05/2025	Hung	Town Crier	Win	S&V	Good
+20	18/05/2025	Diem	Juggler	Win	S&V	Good
+20	18/05/2025	Diep	Oracle	Win	S&V	Good
+20	18/05/2025	Deniz	Savant	Win	S&V	Good
+20	18/05/2025	Angie	Mathematician	Win	S&V	Good
+20	18/05/2025	Khoa	Snake Charmer	Win	S&V	Good
+20	18/05/2025	Thi	Evil Twin	Lose	S&V	Evil
+20	18/05/2025	Johnny	Witch	Lose	S&V	Evil
+20	18/05/2025	Bao	Artist	Win	S&V	Good
+21	18/05/2025	Vinh109	Barber	Lose	S&V	Good
+21	18/05/2025	Hung	Vortox	Win	S&V	Evil
+21	18/05/2025	Diem	Cerenovus	Win	S&V	Evil
+21	18/05/2025	Diep	Artist	Lose	S&V	Good
+21	18/05/2025	Angie	Mathematician	Lose	S&V	Good
+21	18/05/2025	Khang	Pit-Hag	Win	S&V	Evil
+21	18/05/2025	Khoa	Klutz	Lose	S&V	Good
+21	18/05/2025	Thi	Oracle	Lose	S&V	Good
+21	18/05/2025	Deniz	Seamstress	Lose	S&V	Good
+21	18/05/2025	Bao	Sweetheart	Lose	S&V	Good
+22	18/05/2025	Diep	Seamstress	Lose	S&V	Good
+22	18/05/2025	Johnny	Flowergirl	Lose	S&V	Good
+22	18/05/2025	Hung	Artist	Lose	S&V	Good
+22	18/05/2025	Bao	Klutz	Lose	S&V	Good
+22	18/05/2025	Khoa	Cerenovus	Win	S&V	Evil
+22	18/05/2025	Thi	Sage	Lose	S&V	Good
+22	18/05/2025	Deniz	Snake Charmer	Lose	S&V	Good
+22	18/05/2025	Angie	No Dashii	Win	S&V	Evil
+23	21/05/2025	Khoi	Imp	Win	TB	Evil
+23	21/05/2025	Wasabi	Scarlet Woman	Win	TB	Evil
+23	21/05/2025	Hung	Empath	Lose	TB	Good
+23	21/05/2025	Thu	Washerwoman	Lose	TB	Good
+23	21/05/2025	Ly	Investigator	Lose	TB	Good
+23	21/05/2025	Oanh	Ravenkeeper	Lose	TB	Good
+23	21/05/2025	Binh	Slayer	Lose	TB	Good
+23	21/05/2025	Diep	Recluse	Lose	TB	Good
+23	21/05/2025	Khoa	Undertaker	Lose	TB	Good
+24	06/06/2025	Man Kit	Grandmother	Win	BMR	Good
+24	06/06/2025	Johnny	Innkeeper	Win	BMR	Good
+24	06/06/2025	Diem	Exorcist	Win	BMR	Good
+24	06/06/2025	Vinh109	Po	Lose	BMR	Evil
+24	06/06/2025	Hung	Mastermind	Lose	BMR	Evil
+24	06/06/2025	Diep	Tea Lady	Win	BMR	Good
+24	06/06/2025	Khoa	Gossip	Win	BMR	Good
+24	06/06/2025	Bao	Moonchild	Win	BMR	Good
+25	06/06/2025	Man Kit	Chambermaid	Lose	BMR	Good
+25	06/06/2025	Johnny	Professor	Lose	BMR	Good
+25	06/06/2025	Diem	Tea Lady	Lose	BMR	Good
+25	06/06/2025	Hung	Gambler	Lose	BMR	Good
+25	06/06/2025	Vinh109	Devils advocate	Win	BMR	Evil
+25	06/06/2025	Diep	Sailor	Lose	BMR	Good
+25	06/06/2025	Khoa	Lunatic	Lose	BMR	Good
+25	06/06/2025	Bao	Shabaloth	Win	BMR	Evil
+26	06/06/2025	Man Kit	Chambermaid	Win	BMR	Good
+26	06/06/2025	Johnny	Goon	Win	BMR	Good
+26	06/06/2025	Diem	Gambler	Win	BMR	Good
+26	06/06/2025	Hung	Gossip	Win	BMR	Good
+26	06/06/2025	Vinh109	Innkeeper	Win	BMR	Good
+26	06/06/2025	Diep	Shabaloth	Lose	BMR	Evil
+26	06/06/2025	Khoa	Professor	Win	BMR	Good
+26	06/06/2025	Bao	Assassin	Lose	BMR	Evil
+27	06/06/2025	Man Kit	Lunatic	Lose	BMR	Good
+27	06/06/2025	Johnny	Godfather	Win	BMR	Evil
+27	06/06/2025	Diem	Tea Lady	Lose	BMR	Good
+27	06/06/2025	Hung	Gambler	Lose	BMR	Good
+27	06/06/2025	Vinh109	Gossip	Lose	BMR	Good
+27	06/06/2025	Diep	Sailor	Lose	BMR	Good
+27	06/06/2025	Khoa	Po	Win	BMR	Evil
+27	06/06/2025	Bao	Minstrel	Lose	BMR	Good
+27	06/06/2025	Thi	Grandmother	Lose	BMR	Good
+28	19/07/2025	Karl-Thomas	Gambler	Lose	BMR	Good
+28	19/07/2025	Angie	Grandmother	Lose	BMR	Good
+28	19/07/2025	Deniz	Zombuul	Win	BMR	Evil
+28	19/07/2025	Hung	Godfather	Win	BMR	Evil
+28	19/07/2025	Bao	Moonchild	Lose	BMR	Good
+28	19/07/2025	Vinh	Professor	Lose	BMR	Good
+28	19/07/2025	Man Kit	Exorcist	Lose	BMR	Good
+28	19/07/2025	Thi	Tea Lady	Lose	BMR	Good
+28	19/07/2025	Anne	Gossip	Lose	BMR	Good
+29	19/07/2025	Man Kit	Grandmother	Win	BMR	Good
+29	19/07/2025	Bao	Po	Lose	BMR	Evil
+29	19/07/2025	Karl-Thomas	Tinker	Win	BMR	Good
+29	19/07/2025	Hung	Fool	Win	BMR	Good
+29	19/07/2025	Angie	Gambler	Win	BMR	Good
+29	19/07/2025	Anne	Professor	Win	BMR	Good
+29	19/07/2025	Thi	Moonchild	Win	BMR	Good
+29	19/07/2025	Deniz	Devils advocate	Lose	BMR	Evil
+29	19/07/2025	Vinh	Tea Lady	Win	BMR	Good
+30	19/07/2025	Thi	Sailor	Win	BMR	Good
+30	19/07/2025	Hung	Tinker	Win	BMR	Good
+30	19/07/2025	Karl-Thomas	Moonchild	Win	BMR	Good
+30	19/07/2025	Man Kit	Tea Lady	Win	BMR	Good
+30	19/07/2025	Khang	Exorcist	Win	BMR	Good
+30	19/07/2025	Angie	Professor	Win	BMR	Good
+30	19/07/2025	Bao	Assassin	Lose	BMR	Evil
+30	19/07/2025	Deniz	Fool	Win	BMR	Good
+30	19/07/2025	Vinh	Shabaloth	Lose	BMR	Evil
+31	16/08/2025	Deniz	Mastermind	Win	BMR	Evil
+31	16/08/2025	Bao	Innkeeper	Lose	BMR	Good
+31	16/08/2025	Johnny	Sailor	Lose	BMR	Good
+31	16/08/2025	KhangQ	Gambler	Lose	BMR	Good
+31	16/08/2025	Xindi	Pukka	Win	BMR	Evil
+31	16/08/2025	Angie	Gossip	Lose	BMR	Good
+31	16/08/2025	Phuong Anh	Courtier	Lose	BMR	Good
+32	16/08/2025	Deniz	Exorcist	Win	BMR	Good
+32	16/08/2025	Bao	Sailor	Win	BMR	Good
+32	16/08/2025	Khang	Mastermind	Lose	BMR	Evil
+32	16/08/2025	KhangQ	Po	Lose	BMR	Evil
+32	16/08/2025	Xindi	Innkeeper	Win	BMR	Good
+32	16/08/2025	Angie	Professor	Win	BMR	Good
+32	16/08/2025	Phuong Anh	Gambler	Win	BMR	Good
+33	13/09/2025	KhangQ	Zombuul	Lose	BMR	Evil
+33	13/09/2025	Deniz	Gossip	Win	BMR	Good
+33	13/09/2025	Diem	Innkeeper	Win	BMR	Good
+33	13/09/2025	Johnny	Sailor	Win	BMR	Good
+33	13/09/2025	Diep	Gambler	Win	BMR	Good
+33	13/09/2025	Angie	Devils advocate	Lose	BMR	Evil
+33	13/09/2025	Khoa	Goon	Lose	BMR	Evil
+33	13/09/2025	Hung	Moonchild	Win	BMR	Good
+33	13/09/2025	Xindi	Professor	Win	BMR	Good
+34	13/09/2025	Angie	Lunatic	Lose	BMR	Good
+34	13/09/2025	Thi	Shabaloth	Win	BMR	Evil
+34	13/09/2025	Hung	Godfather	Win	BMR	Evil
+34	13/09/2025	Diem	Innkeeper	Lose	BMR	Good
+34	13/09/2025	Diep	Mastermind	Win	BMR	Evil
+34	13/09/2025	Khoa	Gambler	Lose	BMR	Good
+34	13/09/2025	Xindi	Sailor	Lose	BMR	Good
+34	13/09/2025	Deniz	Exorcist	Lose	BMR	Good
+34	13/09/2025	Khang	Gossip	Lose	BMR	Good
+34	13/09/2025	KhangQ	Chambermaid	Lose	BMR	Good
