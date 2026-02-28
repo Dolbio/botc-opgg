@@ -307,3 +307,39 @@ Spiel #	Datum	Name	Rolle	Win / Lose	Set	Team
 34	13/09/2025	Deniz	Exorcist	Lose	BMR	Good
 34	13/09/2025	Khang	Gossip	Lose	BMR	Good
 34	13/09/2025	KhangQ	Chambermaid	Lose	BMR	Good
+35	17/01/2026	Lam	Po	Lose	BMR	Evil
+35	17/01/2026	Bao	Gambler	Win	BMR	Good
+35	17/01/2026	Man Kit	Grandmother	Win	BMR	Good
+35	17/01/2026	Deniz	Sailor	Win	BMR	Good
+35	17/01/2026	Angie	Tea Lady	Win	BMR	Good
+35	17/01/2026	Johnny	Moonchild	Win	BMR	Good
+35	17/01/2026	Khang	Devils advocate	Lose	BMR	Evil
+35	17/01/2026	Diep	Exorcist	Win	BMR	Good
+35	17/01/2026	Vinh109	Goon	Win	BMR	Good
+36	17/01/2026	Thi	Gossip	Win	BMR	Good
+36	17/01/2026	Bao	Lunatic	Win	BMR	Good
+36	17/01/2026	Man Kit	Sailor	Win	BMR	Good
+36	17/01/2026	Deniz	Mastermind	Lose	BMR	Evil
+36	17/01/2026	Khang	Shabaloth	Lose	BMR	Evil
+36	17/01/2026	Angie	Chambermaid	Win	BMR	Good
+36	17/01/2026	Diep	Tea Lady	Win	BMR	Good
+36	17/01/2026	Vinh109	Gambler	Win	BMR	Good
+36	17/01/2026	Lam	Goon	Lose	BMR	Evil
+37	17/01/2026	Thi	Investigator	Win	TB	Good
+37	17/01/2026	Man Kit	Saint	Win	TB	Good
+37	17/01/2026	Bao	Imp	Lose	TB	Evil
+37	17/01/2026	DIep	Fortune Teller	Win	TB	Good
+37	17/01/2026	Khang	Slayer	Win	TB	Good
+37	17/01/2026	Johnny	Butler	Win	TB	Good
+37	17/01/2026	Deniz	Poisoner	Lose	TB	Evil
+37	17/01/2026	Vinh109	Chef	Win	TB	Good
+37	17/01/2026	Lam	Monk	Win	TB	Good
+38	17/01/2026	Thi	Mutant	Win	S&V	Good
+38	17/01/2026	Man Kit	Sweetheart	Win	S&V	Good
+38	17/01/2026	Bao	Philosopher	Win	S&V	Good
+38	17/01/2026	DIep	Flowergirl	Win	S&V	Good
+38	17/01/2026	Angie	Dreamer	Win	S&V	Good
+38	17/01/2026	Johnny	Pit-Hag	Lose	S&V	Evil
+38	17/01/2026	Deniz	Seamstress	Win	S&V	Good
+38	17/01/2026	Vinh109	Klutz	Win	S&V	Good
+38	17/01/2026	Lam	Fang Gu	Lose	S&V	Evil

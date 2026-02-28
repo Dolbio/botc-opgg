@@ -87,6 +87,7 @@ const BotCStatsTracker = () => {
   const [sessionShowHighlights, setSessionShowHighlights] = useState(false);
   const [sessionHighlightYear, setSessionHighlightYear] = useState("all");
 
+  const [titleClicks, setTitleClicks] = useState(0);
   const demoMatches = [
     { id: 1, date: '2025-01-20', season: '2025', script: 'Trouble Brewing', storyteller: 'ClockMaster',
       players: [
@@ -143,11 +144,16 @@ const BotCStatsTracker = () => {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      // Try to load from games.txt first
-      const res = await fetch('./games.txt?t=' + Date.now());
+      const base = (typeof window !== 'undefined' && window.location.pathname.includes('/botc-opgg')) ? '/botc-opgg/' : '/';
+      const url = `${base}games.txt?t=` + Date.now();
+      console.log('[BotC] Versuche games.txt zu laden von:', url);
+      const res = await fetch(url);
+      console.log('[BotC] fetch Status:', res.status, res.ok);
       if (res.ok) {
         const text = await res.text();
+        console.log('[BotC] games.txt geladen, Länge:', text.length, 'erste Zeile:', text.split('\n')[0]);
         const matches = parseTxtToMatches(text);
+        console.log('[BotC] Geparste Spiele:', matches.length);
         if (matches.length > 0) {
           setImportedMatches(matches);
           const uniquePlayers = new Set();
@@ -156,10 +162,12 @@ const BotCStatsTracker = () => {
           setLastImportDate('games.txt (' + matches.length + ' Spiele)');
           setIsLoading(false);
           return;
+        } else {
+          console.warn('[BotC] games.txt gefunden aber keine Spiele geparst. Inhalt:', text.substring(0, 200));
         }
       }
     } catch (e) {
-      // games.txt not found, fall through to localStorage
+      console.warn('[BotC] games.txt fetch fehlgeschlagen:', e.message);
     }
     // Fallback: localStorage
     try {
@@ -265,7 +273,7 @@ const BotCStatsTracker = () => {
   const calculateStatsForPlayer = (playerName, filterSeason = 'all', filterScript = 'all') => {
     const allMatches = getAllMatches();
     let playerMatchList = getPlayerMatches(playerName);
-    if (filterSeason !== 'all') playerMatchList = playerMatchList.filter(m => (m.date ? m.date.substring(0,4) : m.season) === filterSeason);
+    if (filterSeason !== 'all') playerMatchList = playerMatchList.filter(m => getMatchSeason(m.date) === filterSeason);
     if (filterScript !== 'all') playerMatchList = playerMatchList.filter(m => m.script === filterScript);
     const playedMatches = playerMatchList.filter(m => m.role !== 'Storyteller');
     const total = playedMatches.length;
@@ -275,7 +283,7 @@ const BotCStatsTracker = () => {
     const evilWins = evilMatches.filter(m => m.result === 'Sieg').length;
     const goodWins = goodMatches.filter(m => m.result === 'Sieg').length;
     let allFilteredMatches = allMatches;
-    if (filterSeason !== 'all') allFilteredMatches = allFilteredMatches.filter(m => (m.date ? m.date.substring(0,4) : m.season) === filterSeason);
+    if (filterSeason !== 'all') allFilteredMatches = allFilteredMatches.filter(m => getMatchSeason(m.date) === filterSeason);
     if (filterScript !== 'all') allFilteredMatches = allFilteredMatches.filter(m => m.script === filterScript);
     const stGames = allFilteredMatches.filter(m => m.storyteller === playerName).length;
     return {
@@ -292,7 +300,7 @@ const BotCStatsTracker = () => {
   const calculateStats = (playerMatches, playerName) => {
     const resolvedName = playerName ?? selectedPlayer?.name;
     const allMatches = getAllMatches();
-    let filteredMatches = selectedSeason === 'all' ? playerMatches : playerMatches.filter(m => (m.date ? m.date.substring(0,4) : m.season) === selectedSeason);
+    let filteredMatches = selectedSeason === 'all' ? playerMatches : playerMatches.filter(m => getMatchSeason(m.date) === selectedSeason);
     if (selectedScript !== 'all') filteredMatches = filteredMatches.filter(m => m.script === selectedScript);
     const playedMatches = filteredMatches.filter(m => m.role !== 'Storyteller');
     const total = playedMatches.length;
@@ -313,7 +321,7 @@ const BotCStatsTracker = () => {
       role, games: roleCounts[role], wins: roleWins[role] || 0,
       winrate: ((roleWins[role] || 0) / roleCounts[role] * 100).toFixed(1)
     })).sort((a, b) => b.games - a.games);
-    let allFilteredMatches = selectedSeason === 'all' ? allMatches : allMatches.filter(m => (m.date ? m.date.substring(0,4) : m.season) === selectedSeason);
+    let allFilteredMatches = selectedSeason === 'all' ? allMatches : allMatches.filter(m => getMatchSeason(m.date) === selectedSeason);
     if (selectedScript !== 'all') allFilteredMatches = allFilteredMatches.filter(m => m.script === selectedScript);
     const stGames = allFilteredMatches.filter(m => m.storyteller === resolvedName);
 
@@ -383,16 +391,20 @@ const BotCStatsTracker = () => {
     }
   };
 
-  const getAvailableYears = () => {
-    const years = new Set();
-    getAllMatches().forEach(m => {
-      const year = m.date ? m.date.substring(0, 4) : m.season;
-      if (year) years.add(year);
-    });
-    return Array.from(years).sort().reverse();
+  // Season logic: Season 1 = all 2025 + Jan 2026, Season 2 = Feb 2026 - Jan 2027, etc.
+  const getMatchSeason = (date) => {
+    if (!date) return '1';
+    const [year, month] = date.split('-').map(Number);
+    if (year < 2026) return '1';
+    if (month === 1) return String(year - 2025);   // Jan 2026 → S1, Jan 2027 → S2
+    return String(year - 2024);                     // Feb 2026 → S2, Feb 2027 → S3
   };
 
-  const getAvailableSeasons = getAvailableYears;
+  const getAvailableYears = () => {
+    const seasons = new Set();
+    getAllMatches().forEach(m => seasons.add(getMatchSeason(m.date)));
+    return Array.from(seasons).sort((a,b) => Number(b) - Number(a));
+  };
 
   const getAvailableScripts = () => {
     const scripts = new Set();
@@ -412,6 +424,9 @@ const BotCStatsTracker = () => {
       setSelectedPlayer(player);
       setMatches(playerMatches);
     }
+    // Auto-select newest season for leaderboard
+    const seasons = [...new Set(currentMatches.map(m => getMatchSeason(m.date)))].sort((a,b) => Number(b)-Number(a));
+    if (seasons.length > 0) setLbSeason(seasons[0]);
   }, [importedMatches]);
 
   useEffect(() => {
@@ -422,7 +437,7 @@ const BotCStatsTracker = () => {
     const allMatches = getAllMatches();
     let ms = allMatches
       .filter(m => m.players.some(p => p.name === playerName))
-      .filter(m => filterSeason === 'all' || (m.date ? m.date.substring(0,4) : m.season) === filterSeason)
+      .filter(m => filterSeason === 'all' || getMatchSeason(m.date) === filterSeason)
       .filter(m => filterScript === 'all' || m.script === filterScript)
       .map(m => {
         const p = m.players.find(x => x.name === playerName);
@@ -451,19 +466,18 @@ const BotCStatsTracker = () => {
   const getLeaderboardData = () => {
     const allMatches = getAllMatches();
     const scripts3 = ['Trouble Brewing', 'Bad Moon Rising', 'Sects and Violets'];
-    return availablePlayers.map(player => {
+    const build = (minGames) => availablePlayers.map(player => {
       const base = calculateStatsForPlayer(player.name, lbSeason, lbScript);
       const scriptStats = {};
       scripts3.forEach(sc => {
         const ms = allMatches.filter(m => m.script === sc && m.players.some(p => p.name === player.name));
-        const filtered = lbSeason !== 'all' ? ms.filter(m => (m.date ? m.date.substring(0,4) : m.season) === lbSeason) : ms;
+        const filtered = lbSeason !== 'all' ? ms.filter(m => getMatchSeason(m.date) === lbSeason) : ms;
         const wins = filtered.filter(m => m.players.find(p => p.name === player.name)?.result === 'Sieg').length;
         scriptStats[sc] = { games: filtered.length, wins, wr: filtered.length > 0 ? parseFloat(((wins/filtered.length)*100).toFixed(1)) : null };
       });
       return { ...player, ...base, scriptStats };
-    }
-    ).filter(p => {
-      if (p.total < lbMinGames) return false;
+    }).filter(p => {
+      if (p.total < minGames) return false;
       if (lbSearch && !p.name.toLowerCase().includes(lbSearch.toLowerCase())) return false;
       if (lbTeamFilter === 'good' && p.goodGames === 0) return false;
       if (lbTeamFilter === 'evil' && p.evilGames === 0) return false;
@@ -477,13 +491,16 @@ const BotCStatsTracker = () => {
       const av = getVal(a), bv = getVal(b);
       return lbSortDir === 'desc' ? bv - av : av - bv;
     });
+
+    const result = build(lbMinGames);
+    return result.length > 0 ? result : build(1);
   };
 
 
   const getRolesData = () => {
     const allMatches = getAllMatches();
     let filtered = allMatches;
-    if (rsSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rsSeason);
+    if (rsSeason !== 'all') filtered = filtered.filter(m => getMatchSeason(m.date) === rsSeason);
     if (rsScript !== 'all') filtered = filtered.filter(m => m.script === rsScript);
 
     const roleMap = {};
@@ -531,7 +548,7 @@ const BotCStatsTracker = () => {
   const getRoleRankingData = () => {
     const allMatches = getAllMatches();
     let filtered = allMatches;
-    if (rrSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rrSeason);
+    if (rrSeason !== 'all') filtered = filtered.filter(m => getMatchSeason(m.date) === rrSeason);
     if (rrScript !== 'all') filtered = filtered.filter(m => m.script === rrScript);
 
     const rolesSet = new Set();
@@ -580,7 +597,7 @@ const BotCStatsTracker = () => {
     const allMatches = getAllMatches();
     const filtered = hofSeason === 'all'
       ? allMatches
-      : allMatches.filter(m => (m.date ? m.date.substring(0, 4) : m.season) === hofSeason);
+      : allMatches.filter(m => getMatchSeason(m.date) === hofSeason);
 
     const scripts = ['__all__', ...Array.from(new Set(filtered.map(m => m.script))).sort()];
 
@@ -611,7 +628,7 @@ const BotCStatsTracker = () => {
     const allMatches = getAllMatches();
     const filtered = hofSeason === 'all'
       ? allMatches
-      : allMatches.filter(m => (m.date ? m.date.substring(0, 4) : m.season) === hofSeason);
+      : allMatches.filter(m => getMatchSeason(m.date) === hofSeason);
 
     return Object.entries(CATEGORY_DISPLAY).map(([catKey, cfg]) => {
       const playerMap = {};
@@ -635,7 +652,7 @@ const BotCStatsTracker = () => {
   const getSessionHighlightsData = (yearFilter = 'all') => {
     const allMatches = getAllMatches();
     let dates = [...new Set(allMatches.map(m => m.date).filter(Boolean))].sort();
-    if (yearFilter !== 'all') dates = dates.filter(d => d.startsWith(yearFilter));
+    if (yearFilter !== 'all') dates = dates.filter(d => getMatchSeason(d) === yearFilter);
     if (dates.length === 0) return null;
 
     // Per-player session stats
@@ -764,7 +781,7 @@ const BotCStatsTracker = () => {
   const getRoleSynergyData = (minGames = 3) => {
     const allMatches = getAllMatches();
     let filtered = allMatches;
-    if (rsSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rsSeason);
+    if (rsSeason !== 'all') filtered = filtered.filter(m => getMatchSeason(m.date) === rsSeason);
     if (rsScript !== 'all') filtered = filtered.filter(m => m.script === rsScript);
 
     const pairMap = {};
@@ -811,7 +828,7 @@ const BotCStatsTracker = () => {
   const getRSHighlightsData = () => {
     const allMatches = getAllMatches();
     let filtered = allMatches;
-    if (rsSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rsSeason);
+    if (rsSeason !== 'all') filtered = filtered.filter(m => getMatchSeason(m.date) === rsSeason);
     if (rsScript !== 'all') filtered = filtered.filter(m => m.script === rsScript);
 
     const roleMap = {};
@@ -878,7 +895,7 @@ const BotCStatsTracker = () => {
   const getRRHighlightsData = () => {
     const allMatches = getAllMatches();
     let filtered = allMatches;
-    if (rrSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rrSeason);
+    if (rrSeason !== 'all') filtered = filtered.filter(m => getMatchSeason(m.date) === rrSeason);
     if (rrScript !== 'all') filtered = filtered.filter(m => m.script === rrScript);
 
     // ── per player+role ──
@@ -1034,7 +1051,14 @@ const BotCStatsTracker = () => {
         {/* Header */}
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2 flex-wrap gap-4">
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
+            <h1
+              className="text-4xl font-bold bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent cursor-default select-none"
+              onClick={() => {
+                const next = titleClicks + 1;
+                setTitleClicks(next);
+                if (next >= 5) { setShowImport(true); setTitleClicks(0); }
+              }}
+            >
               🕐 Blood on the Clocktower Stats
             </h1>
           </div>
@@ -1045,7 +1069,7 @@ const BotCStatsTracker = () => {
               {lastImportDate && <p className="text-xs text-gray-400">{lastImportDate}</p>}
             </div>
           ) : (
-            <p className="text-sm text-yellow-300 mt-1">⚠️ Keine Spieldaten gefunden — bitte <code className="bg-gray-800 px-1 rounded">games.txt</code> im selben Ordner ablegen.</p>
+            <p className="text-sm text-yellow-300 mt-1">⚠️ Keine Spieldaten gefunden — bitte <code className="bg-gray-800 px-1 rounded">games.txt</code> im <code className="bg-gray-800 px-1 rounded">public/</code> Ordner ablegen.</p>
           )}
         </div>
 
@@ -1112,9 +1136,9 @@ const BotCStatsTracker = () => {
                       Alle
                     </button>
                     {getAvailableYears().map(y => (
-                      <button key={y} onClick={() => setLbSeason(y)}
+                    <button key={y} onClick={() => { setLbSeason(y); setLbMinGames(5); }}
                         className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${lbSeason === y ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-                        {y}
+                        Season {y}
                       </button>
                     ))}
                   </div>
@@ -1247,11 +1271,11 @@ const BotCStatsTracker = () => {
                           <td className="py-3 px-4 text-center font-mono text-green-400">{player.wins}</td>
                           <td className="py-3 px-4 text-center">
                             <div className="flex flex-col items-center gap-1">
-                              <span className={`font-bold text-base ${dispWinrate >= 60 ? 'text-green-400' : dispWinrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                              <span className={`font-bold text-base ${dispWinrate > 50 ? 'text-green-400' : dispWinrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                                 {dispWinrate}%
                               </span>
                               <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all ${dispWinrate >= 60 ? 'bg-green-500' : dispWinrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                <div className={`h-full rounded-full transition-all ${dispWinrate > 50 ? 'bg-green-500' : dispWinrate === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                   style={{ width: `${Math.min(dispWinrate, 100)}%` }} />
                               </div>
                             </div>
@@ -1321,7 +1345,7 @@ const BotCStatsTracker = () => {
                             const s = player.scriptStats?.[sc];
                             return (
                               <td key={sc} className="py-3 px-4 text-center text-xs">
-                                {s && s.games > 0 ? <div><span className={`font-semibold ${s.wr >= 60 ? 'text-green-400' : s.wr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{s.wr}%</span><div className="text-gray-500">{s.games}Sp.</div></div> : <span className="text-gray-600">—</span>}
+                                {s && s.games > 0 ? <div><span className={`font-semibold ${s.wr > 50 ? 'text-green-400' : s.wr === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{s.wr}%</span><div className="text-gray-500">{s.games}Sp.</div></div> : <span className="text-gray-600">—</span>}
                               </td>
                             );
                           })}
@@ -1456,7 +1480,7 @@ const BotCStatsTracker = () => {
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => setRsSeason('all')} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsSeason === 'all' ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle</button>
                     {years.map(y => (
-                      <button key={y} onClick={() => setRsSeason(y)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsSeason === y ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{y}</button>
+                      <button key={y} onClick={() => setRsSeason(y)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rsSeason === y ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Season {y}</button>
                     ))}
                   </div>
                 </div>
@@ -1549,7 +1573,7 @@ const BotCStatsTracker = () => {
                 const synergies = getRoleSynergyData(rsAnalysisMinGames);
                 const goodSynergies = synergies.filter(p => p.team === 'Gut' || synergies.find(s => s.role1 === p.role1 && s.role2 === p.role2));
                 const top = synergies.slice(0, 20);
-                const topStrong = synergies.filter(p => p.winrate >= 60).slice(0, 10);
+                const topStrong = synergies.filter(p => p.winrate > 50).slice(0, 10);
                 const topWeak   = [...synergies].sort((a,b) => a.winrate - b.winrate || b.games - a.games).slice(0, 5);
                 const topFreq   = [...synergies].sort((a,b) => b.games - a.games).slice(0, 5);
 
@@ -1566,10 +1590,10 @@ const BotCStatsTracker = () => {
                 const WrBar = ({ wr }) => (
                   <div className="flex items-center gap-2 mt-1.5">
                     <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                      <div className={`h-full rounded-full ${wr >= 60 ? 'bg-green-500' : wr >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                      <div className={`h-full rounded-full ${wr > 50 ? 'bg-green-500' : wr === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                         style={{ width: `${wr}%` }} />
                     </div>
-                    <span className={`text-xs font-bold w-10 text-right ${wr >= 60 ? 'text-green-400' : wr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
+                    <span className={`text-xs font-bold w-10 text-right ${wr > 50 ? 'text-green-400' : wr === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
                   </div>
                 );
 
@@ -1713,7 +1737,7 @@ const BotCStatsTracker = () => {
                                       <td className="py-2.5 px-4 text-center font-mono text-green-400">{p.wins}</td>
                                       <td className="py-2.5 px-4 text-center font-mono text-red-400">{p.losses}</td>
                                       <td className="py-2.5 px-4 text-center">
-                                        <span className={`font-bold ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                                        <span className={`font-bold ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
                                       </td>
                                     </tr>
                                   ))}
@@ -1744,7 +1768,7 @@ const BotCStatsTracker = () => {
                       style={catCfg ? {borderLeftColor: catCfg.color, borderLeftWidth: 4} : {}}>
                       <div>
                         <div className="text-xs text-gray-400 mb-0.5">{catCfg ? `${catCfg.emoji} ${catCfg.label}` : 'Alle Kategorien'}</div>
-                        <div className={`text-3xl font-black ${filteredWr >= 60 ? 'text-green-400' : filteredWr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{filteredWr}%</div>
+                        <div className={`text-3xl font-black ${filteredWr > 50 ? 'text-green-400' : filteredWr === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{filteredWr}%</div>
                       </div>
                       <div className="text-sm text-gray-300">
                         <span className="text-green-400 font-semibold">{filteredWins}S</span>
@@ -1828,11 +1852,11 @@ const BotCStatsTracker = () => {
                             <td className="py-3 px-4 text-center font-mono text-red-400">{row.losses}</td>
                             <td className="py-3 px-4 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`font-bold ${row.winrate >= 60 ? 'text-green-400' : row.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                <span className={`font-bold ${row.winrate > 50 ? 'text-green-400' : row.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                                   {row.winrate}%
                                 </span>
                                 <div className="w-14 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                  <div className={`h-full rounded-full ${row.winrate >= 60 ? 'bg-green-500' : row.winrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                  <div className={`h-full rounded-full ${row.winrate > 50 ? 'bg-green-500' : row.winrate === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                     style={{ width: `${row.winrate}%` }} />
                                 </div>
                               </div>
@@ -1921,7 +1945,7 @@ const BotCStatsTracker = () => {
                     {['all', ...years].map(y => (
                       <button key={y} onClick={() => setRrSeason(y)}
                         className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${rrSeason === y ? 'bg-orange-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-                        {y === 'all' ? 'Alle Jahre' : y}
+                        {y === 'all' ? 'Alle' : `Season ${y}`}
                       </button>
                     ))}
                   </div>
@@ -2116,7 +2140,7 @@ const BotCStatsTracker = () => {
                               className={`bg-gray-800 rounded-xl p-4 cursor-pointer hover:scale-105 transition-all border ${i===0?'border-yellow-600 bg-yellow-950 bg-opacity-20':i===1?'border-gray-500':'border-amber-700 bg-amber-950 bg-opacity-10'}`}>
                               <div className="flex items-start justify-between mb-2">
                                 <span className="text-2xl">{medals[i]}</span>
-                                <span className={`text-2xl font-black ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                                <span className={`text-2xl font-black ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
                               </div>
                               <div className="font-bold text-white mb-1">👤 {p.name}</div>
                               <div className="text-xs text-gray-400">{p.wins}S / {p.losses}N • {p.games} Spiele</div>
@@ -2171,9 +2195,9 @@ const BotCStatsTracker = () => {
                                   <td className="py-3 px-4 text-center font-mono text-red-400">{p.losses}</td>
                                   <td className="py-3 px-4 text-center">
                                     <div className="flex flex-col items-center gap-1">
-                                      <span className={`font-bold ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                                      <span className={`font-bold ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
                                       <div className="w-14 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full ${p.winrate >= 60 ? 'bg-green-500' : p.winrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                        <div className={`h-full rounded-full ${p.winrate > 50 ? 'bg-green-500' : p.winrate === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                           style={{width:`${p.winrate}%`}}/>
                                       </div>
                                     </div>
@@ -2219,7 +2243,7 @@ const BotCStatsTracker = () => {
               <div className="flex items-start justify-between mb-3">
                 <span className="text-3xl">{medals[i]}</span>
                 <div className="text-right">
-                  <div className={`text-3xl font-black ${player.winrate >= 60 ? 'text-green-400' : player.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                  <div className={`text-3xl font-black ${player.winrate > 50 ? 'text-green-400' : player.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                     {player.winrate}%
                   </div>
                   <div className="text-xs text-gray-400 mt-0.5">Winrate</div>
@@ -2262,7 +2286,7 @@ const BotCStatsTracker = () => {
                       {['all', ...years].map(y => (
                         <button key={y} onClick={() => setHofSeason(y)}
                           className={`px-4 py-2 rounded-lg text-sm font-semibold transition-colors ${hofSeason === y ? 'bg-yellow-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
-                          {y === 'all' ? 'All Time' : y}
+                          {y === 'all' ? 'All Time' : `Season ${y}`}
                         </button>
                       ))}
                     </div>
@@ -2350,7 +2374,7 @@ const BotCStatsTracker = () => {
                   <div className="flex gap-2 flex-wrap">
                     <button onClick={() => setSelectedSeason('all')} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === 'all' ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Alle Jahre</button>
                     {getAvailableYears().map(year => (
-                      <button key={year} onClick={() => setSelectedSeason(year)} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === year ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>{year}</button>
+                      <button key={year} onClick={() => setSelectedSeason(year)} className={`px-4 py-2 rounded-lg font-medium transition-colors ${selectedSeason === year ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>Season {year}</button>
                     ))}
                   </div>
                 </div>
@@ -2442,7 +2466,7 @@ const BotCStatsTracker = () => {
                               <span className="text-sm font-semibold text-white">{d.emoji} {d.category}</span>
                               <div className="flex items-center gap-2">
                                 {selectedCategory === d.category && <span className="text-xs bg-white text-gray-900 px-1.5 py-0.5 rounded font-bold">Aktiv</span>}
-                                <span className="text-lg font-bold" style={{color: d.winrate >= 50 ? "#4ade80" : "#f87171"}}>{d.winrate}%</span>
+                                <span className="text-lg font-bold" style={{color: d.winrate > 50 ? "#4ade80" : "#f87171"}}>{d.winrate}%</span>
                               </div>
                             </div>
                             <div className="text-xs text-gray-400">{d.wins}S / {d.games - d.wins}N • {d.games} Spiele</div>
@@ -2471,7 +2495,7 @@ const BotCStatsTracker = () => {
                               <td className="py-3 px-2 font-medium">{stat.role}</td>
                               <td className="text-center py-3 px-2">{stat.games}</td>
                               <td className="text-center py-3 px-2">{stat.wins}</td>
-                              <td className="text-center py-3 px-2"><span className={`font-bold ${parseFloat(stat.winrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>{stat.winrate}%</span></td>
+                              <td className="text-center py-3 px-2"><span className={`font-bold ${parseFloat(stat.winrate) > 50 ? 'text-green-400' : 'text-red-400'}`}>{stat.winrate}%</span></td>
                             </tr>
                           ))}
                         </tbody>
@@ -2498,7 +2522,7 @@ const BotCStatsTracker = () => {
                               <div className="text-xs text-blue-300 font-medium mb-1">🤝 Selbes Team</div>
                               {teammate.sameTeam > 0 ? (
                                 <>
-                                  <div className={`text-xl font-bold ${parseFloat(teammate.winrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>{teammate.winrate}%</div>
+                                  <div className={`text-xl font-bold ${parseFloat(teammate.winrate) > 50 ? 'text-green-400' : 'text-red-400'}`}>{teammate.winrate}%</div>
                                   <div className="text-xs text-gray-400 mt-0.5">{teammate.sameTeamWins}S / {teammate.sameTeam - teammate.sameTeamWins}N ({teammate.sameTeam} Sp.)</div>
                                 </>
                               ) : (
@@ -2509,7 +2533,7 @@ const BotCStatsTracker = () => {
                               <div className="text-xs text-red-300 font-medium mb-1">⚔️ Gegner</div>
                               {teammate.oppTeam > 0 ? (
                                 <>
-                                  <div className={`text-xl font-bold ${parseFloat(teammate.oppWinrate) >= 50 ? 'text-green-400' : 'text-red-400'}`}>{teammate.oppWinrate}%</div>
+                                  <div className={`text-xl font-bold ${parseFloat(teammate.oppWinrate) > 50 ? 'text-green-400' : 'text-red-400'}`}>{teammate.oppWinrate}%</div>
                                   <div className="text-xs text-gray-400 mt-0.5">{teammate.oppTeamWins}S / {teammate.oppTeam - teammate.oppTeamWins}N ({teammate.oppTeam} Sp.)</div>
                                 </>
                               ) : (
@@ -2531,8 +2555,7 @@ const BotCStatsTracker = () => {
                   </h3>
                   <div className="space-y-3">
                     {matches.filter(match => {
-                      const matchYear = match.date ? match.date.substring(0, 4) : match.season;
-                      const seasonMatch = selectedSeason === 'all' || matchYear === selectedSeason;
+                      const seasonMatch = selectedSeason === 'all' || getMatchSeason(match.date) === selectedSeason;
                       const scriptMatch = selectedScript === 'all' || match.script === selectedScript;
                       const categoryMatch = !selectedCategory || getRoleCategory(match.role) === Object.keys(CATEGORY_DISPLAY).find(k => CATEGORY_DISPLAY[k].label === selectedCategory);
                       let teammateMatch = true;
@@ -2862,7 +2885,7 @@ const BotCStatsTracker = () => {
 
                 // collect available years from all session dates
                 const allSessionDates = getSessionDates();
-                const availableYears = [...new Set(allSessionDates.map(d => d.substring(0,4)))].sort().reverse();
+                const availableYears = [...new Set(allSessionDates.map(d => getMatchSeason(d)))].sort((a,b) => Number(a)-Number(b));
 
                 const cards = [
                   { icon: '📅', accent: 'border-cyan-500',    label: 'Meiste Sessions gespielt',
@@ -2909,7 +2932,7 @@ const BotCStatsTracker = () => {
                               onClick={() => setSessionHighlightYear(y)}
                               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${sessionHighlightYear === y ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
                             >
-                              {y === 'all' ? 'All Time' : y}
+                              {y === 'all' ? 'All Time' : `Season ${y}`}
                             </button>
                           ))}
                         </div>
@@ -3014,11 +3037,11 @@ const BotCStatsTracker = () => {
                           <td className="py-3 px-3 text-center font-mono text-red-400">{p.losses}</td>
                           <td className="py-3 px-4 text-center">
                             <div className="flex flex-col items-center gap-1">
-                              <span className={`font-bold text-base ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                              <span className={`font-bold text-base ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>
                                 {p.winrate}%
                               </span>
                               <div className="w-16 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full ${p.winrate >= 60 ? 'bg-green-500' : p.winrate >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                <div className={`h-full rounded-full ${p.winrate > 50 ? 'bg-green-500' : p.winrate === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
                                   style={{width:`${p.winrate}%`}} />
                               </div>
                             </div>
