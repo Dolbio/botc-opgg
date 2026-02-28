@@ -83,6 +83,11 @@ const BotCStatsTracker = () => {
   const [rrTeam, setRrTeam] = useState('all');
   const [rrShowHighlights, setRrShowHighlights] = useState(false);
   const [rsShowHighlights, setRsShowHighlights] = useState(false);
+  const [rsShowAnalysis, setRsShowAnalysis] = useState(false);
+  const [rsAnalysisMinGames, setRsAnalysisMinGames] = useState(3);
+  const [selectedSession, setSelectedSession] = useState(null);
+  const [sessionShowHighlights, setSessionShowHighlights] = useState(false);
+  const [sessionHighlightYear, setSessionHighlightYear] = useState("all");
 
   const demoMatches = [
     { id: 1, date: '2025-01-20', season: '2025', script: 'Trouble Brewing', storyteller: 'ClockMaster',
@@ -575,22 +580,100 @@ const BotCStatsTracker = () => {
     });
   };
 
-  const getLastSessionData = () => {
+  const getSessionHighlightsData = (yearFilter = 'all') => {
+    const allMatches = getAllMatches();
+    let dates = [...new Set(allMatches.map(m => m.date).filter(Boolean))].sort();
+    if (yearFilter !== 'all') dates = dates.filter(d => d.startsWith(yearFilter));
+    if (dates.length === 0) return null;
+
+    // Per-player session stats
+    const playerMap = {};
+
+    dates.forEach(date => {
+      const sessionMatches = allMatches.filter(m => m.date === date);
+      const playersInSession = new Set();
+      const playerResults = {}; // name -> { wins, games }
+
+      sessionMatches.forEach(match => {
+        match.players.forEach(p => {
+          playersInSession.add(p.name);
+          if (!playerResults[p.name]) playerResults[p.name] = { wins: 0, games: 0 };
+          playerResults[p.name].games++;
+          if (p.result === 'Sieg') playerResults[p.name].wins++;
+        });
+      });
+
+      playersInSession.forEach(name => {
+        if (!playerMap[name]) playerMap[name] = {
+          name,
+          sessions: 0,
+          sessionsWon: 0,  // sessions where winrate >= 50%
+          sessionsPerfect: 0, // sessions where winrate = 100%
+          sessionsLost: 0, // sessions where winrate = 0%
+          totalWins: 0,
+          totalGames: 0,
+          bestSessionWr: 0,
+          worstSessionWr: 100,
+          currentStreak: 0,  // current consecutive sessions with >50% wr
+          bestStreak: 0,
+          streakBuf: 0,
+        };
+        const pr = playerResults[name];
+        const sessionWr = pr.games > 0 ? (pr.wins / pr.games) * 100 : 0;
+        const p = playerMap[name];
+        p.sessions++;
+        p.totalWins += pr.wins;
+        p.totalGames += pr.games;
+        if (sessionWr >= 50) { p.sessionsWon++; p.streakBuf++; } else { p.streakBuf = 0; }
+        if (sessionWr === 100) p.sessionsPerfect++;
+        if (sessionWr === 0 && pr.games > 0) p.sessionsLost++;
+        if (sessionWr > p.bestSessionWr) p.bestSessionWr = parseFloat(sessionWr.toFixed(1));
+        if (sessionWr < p.worstSessionWr) p.worstSessionWr = parseFloat(sessionWr.toFixed(1));
+        p.bestStreak = Math.max(p.bestStreak, p.streakBuf);
+      });
+    });
+
+    // finalize current streak (from most recent sessions)
+    Object.values(playerMap).forEach(p => { p.currentStreak = p.streakBuf; });
+
+    const players = Object.values(playerMap).map(p => ({
+      ...p,
+      sessionWinrate: p.sessions > 0 ? parseFloat(((p.sessionsWon / p.sessions) * 100).toFixed(1)) : 0,
+      overallWinrate: p.totalGames > 0 ? parseFloat(((p.totalWins / p.totalGames) * 100).toFixed(1)) : 0,
+    }));
+
+    const best = (arr, key) => [...arr].sort((a,b) => (b[key]??0)-(a[key]??0))[0];
+
+    return {
+      totalSessions: dates.length,
+      mostSessions:       best(players, 'sessions'),
+      mostSessionsWon:    best(players, 'sessionsWon'),
+      mostSessionsLost:   best(players, 'sessionsLost'),
+      mostPerfect:        best(players, 'sessionsPerfect'),
+      bestSessionWr:      [...players].filter(p => p.sessions >= 3).sort((a,b) => b.sessionWinrate - a.sessionWinrate)[0],
+      worstSessionWr:     [...players].filter(p => p.sessions >= 3).sort((a,b) => a.sessionWinrate - b.sessionWinrate)[0],
+      bestStreak:         best(players, 'bestStreak'),
+      currentStreak:      [...players].filter(p => p.currentStreak > 0).sort((a,b) => b.currentStreak - a.currentStreak)[0],
+      mostTotalWins:      best(players, 'totalWins'),
+    };
+  };
+
+  const getSessionDates = () => {
+    const allMatches = getAllMatches();
+    return [...new Set(allMatches.map(m => m.date).filter(Boolean))].sort().reverse();
+  };
+
+  const getLastSessionData = (forDate = null) => {
     const allMatches = getAllMatches();
     if (allMatches.length === 0) return { date: null, matches: [], playerStats: [] };
 
-    // Find the most recent date
-    const lastDate = allMatches
-      .map(m => m.date)
-      .filter(Boolean)
-      .sort()
-      .reverse()[0];
+    const dates = [...new Set(allMatches.map(m => m.date).filter(Boolean))].sort().reverse();
+    const targetDate = forDate ?? dates[0];
 
     const sessionMatches = allMatches
-      .filter(m => m.date === lastDate)
-      .sort((a, b) => a.id - b.id); // chronological by game #
+      .filter(m => m.date === targetDate)
+      .sort((a, b) => a.id - b.id);
 
-    // Per-player stats for this session
     const playerMap = {};
     sessionMatches.forEach(match => {
       match.players.forEach(p => {
@@ -622,7 +705,54 @@ const BotCStatsTracker = () => {
       }))
       .sort((a, b) => b.winrate - a.winrate || b.games - a.games);
 
-    return { date: lastDate, matches: sessionMatches, playerStats };
+    return { date: targetDate, matches: sessionMatches, playerStats, allDates: dates };
+  };
+
+  // Role synergy analysis for Rollen-Stats page
+  const getRoleSynergyData = (minGames = 3) => {
+    const allMatches = getAllMatches();
+    let filtered = allMatches;
+    if (rsSeason !== 'all') filtered = filtered.filter(m => (m.date ? m.date.substring(0,4) : m.season) === rsSeason);
+    if (rsScript !== 'all') filtered = filtered.filter(m => m.script === rsScript);
+
+    const pairMap = {};
+
+    filtered.forEach(match => {
+      // Group players by team
+      const teams = { Gut: [], Böse: [] };
+      match.players.forEach(p => { if (teams[p.team]) teams[p.team].push(p); });
+
+      Object.values(teams).forEach(teamPlayers => {
+        if (teamPlayers.length < 2) return;
+        const won = teamPlayers[0].result === 'Sieg';
+        // Every unique role pair in this team
+        for (let i = 0; i < teamPlayers.length; i++) {
+          for (let j = i + 1; j < teamPlayers.length; j++) {
+            const r1 = teamPlayers[i].role;
+            const r2 = teamPlayers[j].role;
+            if (r1 === r2) continue; // skip same role
+            const key = [r1, r2].sort().join('|||');
+            if (!pairMap[key]) pairMap[key] = {
+              role1: [r1,r2].sort()[0],
+              role2: [r1,r2].sort()[1],
+              games: 0, wins: 0,
+              team: teamPlayers[0].team,
+            };
+            pairMap[key].games++;
+            if (won) pairMap[key].wins++;
+          }
+        }
+      });
+    });
+
+    return Object.values(pairMap)
+      .filter(p => p.games >= minGames)
+      .map(p => ({
+        ...p,
+        losses: p.games - p.wins,
+        winrate: parseFloat(((p.wins / p.games) * 100).toFixed(1)),
+      }))
+      .sort((a, b) => b.winrate - a.winrate || b.games - a.games);
   };
 
   // Global highlights for Rollen-Stats page (ignores category/search/minGames filters)
@@ -1359,6 +1489,190 @@ const BotCStatsTracker = () => {
                             <p className="text-sm leading-relaxed">{card.content}</p>
                           </div>
                         ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── Role Synergy Analysis (collapsible) ── */}
+              {(() => {
+                const synergies = getRoleSynergyData(rsAnalysisMinGames);
+                const goodSynergies = synergies.filter(p => p.team === 'Gut' || synergies.find(s => s.role1 === p.role1 && s.role2 === p.role2));
+                const top = synergies.slice(0, 20);
+                const topStrong = synergies.filter(p => p.winrate >= 60).slice(0, 10);
+                const topWeak   = [...synergies].sort((a,b) => a.winrate - b.winrate || b.games - a.games).slice(0, 5);
+                const topFreq   = [...synergies].sort((a,b) => b.games - a.games).slice(0, 5);
+
+                const RoleBadge = ({ role }) => {
+                  const cfg = CATEGORY_DISPLAY[getRoleCategory(role)] || CATEGORY_DISPLAY.Sonstige;
+                  return (
+                    <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ backgroundColor: cfg.color + '22', color: cfg.color }}>
+                      {cfg.emoji} {role}
+                    </span>
+                  );
+                };
+
+                const WrBar = ({ wr }) => (
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <div className="flex-1 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full ${wr >= 60 ? 'bg-green-500' : wr >= 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                        style={{ width: `${wr}%` }} />
+                    </div>
+                    <span className={`text-xs font-bold w-10 text-right ${wr >= 60 ? 'text-green-400' : wr >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
+                  </div>
+                );
+
+                return (
+                  <div className="mb-6">
+                    <button
+                      onClick={() => setRsShowAnalysis(v => !v)}
+                      className="w-full flex items-center justify-between px-5 py-3 bg-gray-800 border border-gray-700 rounded-xl hover:bg-gray-750 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="text-base">🔬</span>
+                        <span className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">Rollen-Synergie Analyse</span>
+                        <span className="text-xs text-gray-500">— Welche Rollen-Kombinationen sind stark/schwach?</span>
+                      </div>
+                      {rsShowAnalysis ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                    </button>
+
+                    {rsShowAnalysis && (
+                      <div className="mt-3 space-y-5">
+                        {/* Min games filter */}
+                        <div className="flex items-center gap-3 bg-gray-800 border border-gray-700 rounded-xl px-4 py-3">
+                          <span className="text-xs text-gray-400 font-medium">Min. gemeinsame Spiele:</span>
+                          <div className="flex gap-1.5">
+                            {[2, 3, 5, 8].map(n => (
+                              <button key={n} onClick={() => setRsAnalysisMinGames(n)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${rsAnalysisMinGames === n ? 'bg-green-700 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                                {n}+
+                              </button>
+                            ))}
+                          </div>
+                          <span className="text-xs text-gray-500 ml-2">{synergies.length} Paare gefunden</span>
+                        </div>
+
+                        {synergies.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 bg-gray-800 rounded-xl border border-gray-700">
+                            <p>Keine Paare mit {rsAnalysisMinGames}+ gemeinsamen Spielen gefunden.</p>
+                            <p className="text-xs mt-1">Versuche einen niedrigeren Mindestwert.</p>
+                          </div>
+                        ) : (
+                          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                            {/* Stärkste Kombinationen */}
+                            <div className="bg-gray-800 rounded-xl border border-green-800 overflow-hidden">
+                              <div className="px-4 py-3 bg-green-900 bg-opacity-30 border-b border-green-800 flex items-center gap-2">
+                                <span className="text-base">💪</span>
+                                <span className="text-sm font-bold text-green-300">Stärkste Kombinationen</span>
+                              </div>
+                              <div className="divide-y divide-gray-700">
+                                {topStrong.length === 0 ? (
+                                  <p className="px-4 py-4 text-xs text-gray-500">Keine Kombination mit ≥60% WR</p>
+                                ) : topStrong.map((p, i) => (
+                                  <div key={i} className="px-4 py-3">
+                                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                      <RoleBadge role={p.role1} />
+                                      <span className="text-gray-500 text-xs">+</span>
+                                      <RoleBadge role={p.role2} />
+                                    </div>
+                                    <WrBar wr={p.winrate} />
+                                    <div className="text-xs text-gray-500 mt-1">{p.wins}S / {p.losses}N · {p.games} Sp. zusammen</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Schwächste Kombinationen */}
+                            <div className="bg-gray-800 rounded-xl border border-red-900 overflow-hidden">
+                              <div className="px-4 py-3 bg-red-900 bg-opacity-20 border-b border-red-900 flex items-center gap-2">
+                                <span className="text-base">💀</span>
+                                <span className="text-sm font-bold text-red-300">Schwächste Kombinationen</span>
+                              </div>
+                              <div className="divide-y divide-gray-700">
+                                {topWeak.map((p, i) => (
+                                  <div key={i} className="px-4 py-3">
+                                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                      <RoleBadge role={p.role1} />
+                                      <span className="text-gray-500 text-xs">+</span>
+                                      <RoleBadge role={p.role2} />
+                                    </div>
+                                    <WrBar wr={p.winrate} />
+                                    <div className="text-xs text-gray-500 mt-1">{p.wins}S / {p.losses}N · {p.games} Sp. zusammen</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Häufigste Kombinationen */}
+                            <div className="bg-gray-800 rounded-xl border border-purple-900 overflow-hidden">
+                              <div className="px-4 py-3 bg-purple-900 bg-opacity-20 border-b border-purple-900 flex items-center gap-2">
+                                <span className="text-base">🔁</span>
+                                <span className="text-sm font-bold text-purple-300">Häufigste Kombinationen</span>
+                              </div>
+                              <div className="divide-y divide-gray-700">
+                                {topFreq.map((p, i) => (
+                                  <div key={i} className="px-4 py-3">
+                                    <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                                      <RoleBadge role={p.role1} />
+                                      <span className="text-gray-500 text-xs">+</span>
+                                      <RoleBadge role={p.role2} />
+                                    </div>
+                                    <WrBar wr={p.winrate} />
+                                    <div className="text-xs text-gray-500 mt-1">{p.wins}S / {p.losses}N · {p.games} Sp. zusammen</div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Full table */}
+                        {top.length > 0 && (
+                          <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                            <div className="px-4 py-3 border-b border-gray-700 flex items-center gap-2">
+                              <span className="text-base">📋</span>
+                              <span className="text-sm font-bold text-white">Alle Paare</span>
+                              <span className="text-xs text-gray-500">sortiert nach Winrate</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-900 border-b border-gray-700 text-xs text-gray-400">
+                                    <th className="text-left py-2.5 px-4">#</th>
+                                    <th className="text-left py-2.5 px-4">Kombination</th>
+                                    <th className="text-center py-2.5 px-4">Spiele</th>
+                                    <th className="text-center py-2.5 px-4 text-green-400">Siege</th>
+                                    <th className="text-center py-2.5 px-4 text-red-400">Niederl.</th>
+                                    <th className="text-center py-2.5 px-4 text-yellow-400">Winrate</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {top.map((p, i) => (
+                                    <tr key={i} className={`border-b border-gray-700 ${i % 2 === 0 ? 'bg-gray-800' : ''}`}>
+                                      <td className="py-2.5 px-4 text-gray-500 text-xs">{i + 1}</td>
+                                      <td className="py-2.5 px-4">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          <RoleBadge role={p.role1} />
+                                          <span className="text-gray-500 text-xs">+</span>
+                                          <RoleBadge role={p.role2} />
+                                        </div>
+                                      </td>
+                                      <td className="py-2.5 px-4 text-center font-mono text-gray-300">{p.games}</td>
+                                      <td className="py-2.5 px-4 text-center font-mono text-green-400">{p.wins}</td>
+                                      <td className="py-2.5 px-4 text-center font-mono text-red-400">{p.losses}</td>
+                                      <td className="py-2.5 px-4 text-center">
+                                        <span className={`font-bold ${p.winrate >= 60 ? 'text-green-400' : p.winrate >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -2396,7 +2710,7 @@ const BotCStatsTracker = () => {
 
         {/* ======================== LAST SESSION PAGE ======================== */}
         {activePage === 'session' && (() => {
-          const { date, matches: sessionMatches, playerStats: sessionPlayers } = getLastSessionData();
+          const { date, matches: sessionMatches, playerStats: sessionPlayers, allDates } = getLastSessionData(selectedSession);
 
           if (!date) {
             return (
@@ -2410,34 +2724,70 @@ const BotCStatsTracker = () => {
             );
           }
 
-          // Format date nicely
           const [y, mo, d] = date.split('-');
           const formattedDate = `${d}.${mo}.${y}`;
+          const isLatest = date === allDates[0];
+          const currentIdx = allDates.indexOf(date);
+
           const totalGames = sessionMatches.length;
           const uniquePlayers = sessionPlayers.length;
           const scripts = [...new Set(sessionMatches.map(m => m.script))];
 
-          // MVP = best winrate (min 2 games), most wins tiebreaker
           const mvp = [...sessionPlayers].filter(p => p.games >= 2).sort((a,b) => b.winrate - a.winrate || b.wins - a.wins)[0]
                    || [...sessionPlayers].sort((a,b) => b.winrate - a.winrate || b.wins - a.wins)[0];
-          // Pechvogel = worst winrate (min 2 games)
           const pechvogel = [...sessionPlayers].filter(p => p.games >= 2).sort((a,b) => a.winrate - b.winrate || a.wins - b.wins)[0]
                          || [...sessionPlayers].sort((a,b) => a.winrate - b.winrate)[0];
 
           const medals = ['🥇','🥈','🥉'];
 
+          const fmtDate = (isoDate) => {
+            const [yy, mm, dd] = isoDate.split('-');
+            return `${dd}.${mm}.${yy}`;
+          };
+
           return (
             <div>
               {/* Session Header */}
               <div className="bg-gradient-to-r from-cyan-900 to-blue-900 rounded-xl border border-cyan-700 p-6 mb-6 shadow-xl">
-                <div className="flex flex-wrap items-center justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-3 mb-1">
-                      <Calendar size={28} className="text-cyan-400" />
-                      <h2 className="text-3xl font-bold text-white">Letzte Session</h2>
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Calendar size={28} className="text-cyan-400 flex-shrink-0" />
+                      <h2 className="text-3xl font-bold text-white">
+                        {isLatest ? 'Letzte Session' : 'Session'}
+                      </h2>
+                      {isLatest && <span className="text-xs bg-cyan-600 text-cyan-100 px-2 py-0.5 rounded-full font-semibold">Aktuell</span>}
                     </div>
-                    <p className="text-cyan-300 text-lg font-semibold">{formattedDate}</p>
-                    <p className="text-gray-400 text-sm mt-1">{scripts.join(' • ')}</p>
+
+                    {/* Session Dropdown */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <select
+                        value={date}
+                        onChange={e => setSelectedSession(e.target.value)}
+                        className="bg-gray-900 border border-cyan-700 text-white rounded-lg px-3 py-2 text-sm font-semibold focus:outline-none focus:border-cyan-400 cursor-pointer"
+                      >
+                        {allDates.map((d2, i) => (
+                          <option key={d2} value={d2}>
+                            {fmtDate(d2)}{i === 0 ? ' (Letzte)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {/* Prev / Next arrows */}
+                      <button
+                        onClick={() => setSelectedSession(allDates[currentIdx + 1])}
+                        disabled={currentIdx >= allDates.length - 1}
+                        className="px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Ältere Session"
+                      >‹ Älter</button>
+                      <button
+                        onClick={() => setSelectedSession(currentIdx === 1 ? null : allDates[currentIdx - 1])}
+                        disabled={currentIdx === 0}
+                        className="px-3 py-2 bg-gray-800 border border-gray-600 rounded-lg text-sm text-gray-300 hover:bg-gray-700 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title="Neuere Session"
+                      >Neuer ›</button>
+                    </div>
+
+                    <p className="text-gray-400 text-sm mt-2">{scripts.join(' • ')}</p>
                   </div>
                   <div className="flex gap-6">
                     <div className="text-center">
@@ -2455,6 +2805,81 @@ const BotCStatsTracker = () => {
                   </div>
                 </div>
               </div>
+
+              {/* Session Highlights (collapsible) */}
+              {(() => {
+                const hl = getSessionHighlightsData(sessionHighlightYear);
+                if (!hl) return null;
+
+                // collect available years from all session dates
+                const allSessionDates = getSessionDates();
+                const availableYears = [...new Set(allSessionDates.map(d => d.substring(0,4)))].sort().reverse();
+
+                const cards = [
+                  { icon: '📅', accent: 'border-cyan-500',    label: 'Meiste Sessions gespielt',
+                    content: hl.mostSessions ? <><span className="font-bold text-white">{hl.mostSessions.name}</span><span className="text-gray-300"> — </span><span className="font-bold text-cyan-300">{hl.mostSessions.sessions} Sessions</span><span className="text-xs text-gray-500 ml-1">von {hl.totalSessions} gesamt</span></> : null },
+                  { icon: '🏆', accent: 'border-yellow-500',  label: 'Meiste Sessions gewonnen (≥50% WR)',
+                    content: hl.mostSessionsWon ? <><span className="font-bold text-white">{hl.mostSessionsWon.name}</span><span className="text-gray-300"> gewann </span><span className="font-bold text-yellow-300">{hl.mostSessionsWon.sessionsWon} Sessions</span><span className="text-xs text-gray-500 ml-1">({hl.mostSessionsWon.sessions} gespielt)</span></> : null },
+                  { icon: '💀', accent: 'border-red-500',     label: 'Meiste Sessions verloren (0% WR)',
+                    content: hl.mostSessionsLost ? <><span className="font-bold text-white">{hl.mostSessionsLost.name}</span><span className="text-gray-300"> verlor </span><span className="font-bold text-red-400">{hl.mostSessionsLost.sessionsLost} Sessions</span><span className="text-xs text-gray-500 ml-1">komplett</span></> : null },
+                  { icon: '⭐', accent: 'border-green-500',   label: 'Beste Session-Winrate (3+ Sessions)',
+                    content: hl.bestSessionWr ? <><span className="font-bold text-white">{hl.bestSessionWr.name}</span><span className="font-bold text-green-400 ml-1">{hl.bestSessionWr.sessionWinrate}%</span><span className="text-gray-300"> der Sessions gewonnen </span><span className="text-xs text-gray-500">({hl.bestSessionWr.sessionsWon}/{hl.bestSessionWr.sessions})</span></> : null },
+                  { icon: '😰', accent: 'border-rose-500',    label: 'Schlechteste Session-Winrate (3+ Sessions)',
+                    content: hl.worstSessionWr ? <><span className="font-bold text-white">{hl.worstSessionWr.name}</span><span className="font-bold text-red-400 ml-1">{hl.worstSessionWr.sessionWinrate}%</span><span className="text-gray-300"> der Sessions gewonnen </span><span className="text-xs text-gray-500">({hl.worstSessionWr.sessionsWon}/{hl.worstSessionWr.sessions})</span></> : null },
+                  { icon: '🌟', accent: 'border-amber-500',   label: 'Meiste perfekte Sessions (100% WR)',
+                    content: hl.mostPerfect ? <><span className="font-bold text-white">{hl.mostPerfect.name}</span><span className="text-gray-300"> hatte </span><span className="font-bold text-amber-300">{hl.mostPerfect.sessionsPerfect}× 100%</span><span className="text-gray-300"> in einer Session</span></> : null },
+                  { icon: '🔥', accent: 'border-orange-500',  label: 'Längste Winning-Streak (Sessions)',
+                    content: hl.bestStreak ? <><span className="font-bold text-white">{hl.bestStreak.name}</span><span className="text-gray-300"> gewann </span><span className="font-bold text-orange-300">{hl.bestStreak.bestStreak} Sessions</span><span className="text-gray-300"> in Folge</span></> : null },
+                  { icon: '⚡', accent: 'border-emerald-500', label: 'Aktuelle Session-Streak',
+                    content: hl.currentStreak ? <><span className="font-bold text-white">{hl.currentStreak.name}</span><span className="text-gray-300"> ist seit </span><span className="font-bold text-emerald-300">{hl.currentStreak.currentStreak} Sessions</span><span className="text-gray-300"> auf einem Lauf 🔥</span></> : <span className="text-gray-500">Kein aktiver Streak</span> },
+                  { icon: '🎯', accent: 'border-purple-500',  label: 'Meiste Siege gesamt (über alle Sessions)',
+                    content: hl.mostTotalWins ? <><span className="font-bold text-white">{hl.mostTotalWins.name}</span><span className="text-gray-300"> — </span><span className="font-bold text-purple-300">{hl.mostTotalWins.totalWins} Siege</span><span className="text-xs text-gray-500 ml-1">in {hl.mostTotalWins.totalGames} Spielen</span></> : null },
+                ];
+
+                return (
+                  <div className="mb-6">
+                    <button
+                      onClick={() => setSessionShowHighlights(v => !v)}
+                      className="w-full flex items-center justify-between px-5 py-3 bg-gray-800 border border-gray-700 rounded-xl hover:bg-gray-750 transition-colors group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Award size={16} className="text-cyan-400" />
+                        <span className="text-sm font-semibold text-gray-300 group-hover:text-white transition-colors">Globale Session-Highlights</span>
+                        <span className="text-xs text-gray-500">— Rekorde über alle {hl.totalSessions} Sessions</span>
+                      </div>
+                      {sessionShowHighlights ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
+                    </button>
+                    {sessionShowHighlights && (
+                      <div className="mt-3">
+                        {/* Year filter */}
+                        <div className="flex items-center gap-2 mb-4">
+                          <span className="text-xs text-gray-400 font-medium">Zeitraum:</span>
+                          {['all', ...availableYears].map(y => (
+                            <button
+                              key={y}
+                              onClick={() => setSessionHighlightYear(y)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${sessionHighlightYear === y ? 'bg-cyan-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}
+                            >
+                              {y === 'all' ? 'All Time' : y}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {cards.map((card, i) => card.content && (
+                          <div key={i} className={`bg-gray-800 rounded-xl border border-gray-700 border-l-4 ${card.accent} p-4`}>
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-lg">{card.icon}</span>
+                              <span className="text-xs text-gray-400 font-medium">{card.label}</span>
+                            </div>
+                            <p className="text-sm leading-relaxed">{card.content}</p>
+                          </div>
+                        ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* MVP + Pechvogel */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
