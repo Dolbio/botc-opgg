@@ -2755,7 +2755,7 @@ const BotCStatsTracker = () => {
                           <div className="flex gap-2 flex-wrap mt-2">
                             {titles.map((t, i) => (
                               <span key={i} title={t.tip}
-                                className="text-xs bg-white bg-opacity-20 text-white px-2.5 py-1 rounded-full font-medium cursor-help hover:bg-opacity-30 transition-colors">
+                                className="text-xs bg-black bg-opacity-40 text-yellow-200 border border-yellow-400 border-opacity-40 px-2.5 py-1 rounded-full font-medium cursor-help hover:bg-opacity-60 transition-colors">
                                 {t.emoji} {t.text}
                               </span>
                             ))}
