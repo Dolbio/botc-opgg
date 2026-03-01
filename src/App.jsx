@@ -575,6 +575,60 @@ const BotCStatsTracker = () => {
       if (cfg) titles.push({ emoji: cfg.emoji, text: `${cfg.label}-Spezialist`, tip: `${Math.round(topCat[1]/total*100)}% der Spiele als ${cfg.label}` });
     }
 
+    // ── CATEGORY winrate titles ──
+    const catStats = {};
+    played.forEach(p => {
+      const cat = getRoleCategory(p.role);
+      if (!catStats[cat]) catStats[cat] = { wins: 0, total: 0 };
+      catStats[cat].total++;
+      if (p.result === 'Sieg') catStats[cat].wins++;
+    });
+
+    // 🔍 Info — Detektiv / Falsche Spur
+    if ((catStats.Info?.total || 0) >= 5) {
+      const wr = catStats.Info.wins / catStats.Info.total;
+      if (wr >= 0.6) titles.push({ emoji: '🔎', text: 'Meisterdetektiv', tip: `${Math.round(wr*100)}% Winrate als Info-Rolle (${catStats.Info.total} Spiele)` });
+      else if (wr <= 0.3) titles.push({ emoji: '🤔', text: 'Falsche Spur', tip: `Nur ${Math.round(wr*100)}% Winrate als Info-Rolle trotz ${catStats.Info.total} Spielen` });
+    }
+
+    // 🛡️ Schutz — Beschützer / Nutzloser Wächter
+    if ((catStats.Schutz?.total || 0) >= 4) {
+      const wr = catStats.Schutz.wins / catStats.Schutz.total;
+      if (wr >= 0.6) titles.push({ emoji: '🦺', text: 'Unantastbar', tip: `${Math.round(wr*100)}% Winrate als Schutz-Rolle (${catStats.Schutz.total} Spiele)` });
+      else if (wr <= 0.3) titles.push({ emoji: '🪤', text: 'Nutzloser Wächter', tip: `Nur ${Math.round(wr*100)}% Winrate als Schutz-Rolle` });
+    }
+    // Viel Schutz gespielt
+    if ((catStats.Schutz?.total || 0) >= 5 && catStats.Schutz.total / total >= 0.3) {
+      titles.push({ emoji: '🛡️', text: 'Menschlicher Schutzwall', tip: `${catStats.Schutz.total} Spiele als Schutz-Rolle — ${Math.round(catStats.Schutz.total/total*100)}% aller Spiele` });
+    }
+
+    // 🎭 Außenseiter — Chaosagent / Leidensgefährte
+    if ((catStats.Aussenseiter?.total || 0) >= 4) {
+      const wr = catStats.Aussenseiter.wins / catStats.Aussenseiter.total;
+      if (wr >= 0.6) titles.push({ emoji: '🎪', text: 'Chaosprofi', tip: `${Math.round(wr*100)}% Winrate als Außenseiter` });
+      else if (wr <= 0.3) titles.push({ emoji: '😤', text: 'Ewiger Außenseiter', tip: `Nur ${Math.round(wr*100)}% Winrate als Außenseiter — das Chaos schlägt zurück` });
+    }
+    if ((catStats.Aussenseiter?.total || 0) >= 5 && catStats.Aussenseiter.total / total >= 0.2) {
+      titles.push({ emoji: '🎭', text: 'Sonderling', tip: `${catStats.Aussenseiter.total}× Außenseiter gespielt` });
+    }
+
+    // 🗡️ Minion — Rechte Hand / Verräter
+    if ((catStats.Minion?.total || 0) >= 4) {
+      const wr = catStats.Minion.wins / catStats.Minion.total;
+      if (wr >= 0.6) titles.push({ emoji: '🕵️', text: 'Rechte Hand des Bösen', tip: `${Math.round(wr*100)}% Winrate als Minion` });
+      else if (wr <= 0.3) titles.push({ emoji: '🙈', text: 'Nutzloser Handlanger', tip: `Nur ${Math.round(wr*100)}% Winrate als Minion` });
+    }
+    if ((catStats.Minion?.total || 0) >= 5 && catStats.Minion.total / total >= 0.2) {
+      titles.push({ emoji: '🗡️', text: 'Böse Schachfigur', tip: `${catStats.Minion.total}× Minion gespielt — immer im Dienst des Dämons` });
+    }
+
+    // 😈 Dämon — viel & gut
+    if ((catStats.Daemon?.total || 0) >= 5) {
+      const wr = catStats.Daemon.wins / catStats.Daemon.total;
+      if (wr >= 0.6) titles.push({ emoji: '🔱', text: 'Dämonenfürst', tip: `${Math.round(wr*100)}% Winrate als Dämon (${catStats.Daemon.total} Spiele)` });
+      else if (wr <= 0.3) titles.push({ emoji: '💔', text: 'Gefallener Dämon', tip: `Nur ${Math.round(wr*100)}% Winrate als Dämon — die Stadt hat immer gewonnen` });
+    }
+
     // ── EVIL WINRATE ──
     const evilWins2 = evilPlayed.filter(p => p.result === 'Sieg').length;
     if (evilPlayed.length >= 5 && evilWins2 / evilPlayed.length >= 0.6) {
@@ -1349,6 +1403,12 @@ const BotCStatsTracker = () => {
             className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'allmatches' ? 'bg-gray-800 text-indigo-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
           >
             <Scroll size={16} />Alle Spiele
+          </button>
+          <button
+            onClick={() => setActivePage('titles')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'titles' ? 'bg-gray-800 text-yellow-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            🏅 Titel
           </button>
         </div>
 
@@ -3738,6 +3798,136 @@ const BotCStatsTracker = () => {
                     <p className="text-sm mt-1">Passe die Filter an</p>
                   </div>
                 )}
+              </div>
+            </div>
+          );
+        })()}
+
+
+        {/* ======================== TITEL PAGE ======================== */}
+        {activePage === 'titles' && (() => {
+          const ALL_TITLES = [
+            {
+              group: '🎭 Rollen-Spezialist',
+              color: 'border-orange-600',
+              titles: [
+                { emoji: '🎭', name: '[Rolle]-Stammgast', desc: 'Meiste Spiele mit einer bestimmten Rolle — niemand anderes hat diese Rolle öfter gespielt (min. 3 Spiele).' },
+                { emoji: '🌟', name: '[Rolle]-Legende', desc: '100% Winrate mit einer Rolle bei mindestens 3 Spielen.' },
+                { emoji: '💀', name: '[Rolle]-Fluch', desc: '0% Winrate mit einer Rolle bei mindestens 3 Spielen.' },
+                { emoji: '🎲', name: 'Tausendsassa', desc: 'Hat mindestens 10 verschiedene Rollen gespielt (und insgesamt 10+ Spiele).' },
+              ]
+            },
+            {
+              group: '🔍 Info-Rollen',
+              color: 'border-blue-500',
+              titles: [
+                { emoji: '🔎', name: 'Meisterdetektiv', desc: '60%+ Winrate als Info-Rolle bei mindestens 5 Spielen.' },
+                { emoji: '🤔', name: 'Falsche Spur', desc: '30% oder weniger Winrate als Info-Rolle bei mindestens 5 Spielen — die Infos halfen nicht viel.' },
+              ]
+            },
+            {
+              group: '🛡️ Schutz-Rollen',
+              color: 'border-green-500',
+              titles: [
+                { emoji: '🦺', name: 'Unantastbar', desc: '60%+ Winrate als Schutz-Rolle bei mindestens 4 Spielen.' },
+                { emoji: '🪤', name: 'Nutzloser Wächter', desc: '30% oder weniger Winrate als Schutz-Rolle bei mindestens 4 Spielen.' },
+                { emoji: '🛡️', name: 'Menschlicher Schutzwall', desc: 'Mindestens 30% aller Spiele als Schutz-Rolle gespielt (min. 5 Spiele).' },
+              ]
+            },
+            {
+              group: '🎭 Außenseiter',
+              color: 'border-purple-500',
+              titles: [
+                { emoji: '🎪', name: 'Chaosprofi', desc: '60%+ Winrate als Außenseiter bei mindestens 4 Spielen.' },
+                { emoji: '😤', name: 'Ewiger Außenseiter', desc: '30% oder weniger Winrate als Außenseiter — das Chaos schlägt immer zurück.' },
+                { emoji: '🎭', name: 'Sonderling', desc: 'Mindestens 20% aller Spiele als Außenseiter gespielt (min. 5 Spiele).' },
+              ]
+            },
+            {
+              group: '🗡️ Minion',
+              color: 'border-red-500',
+              titles: [
+                { emoji: '🕵️', name: 'Rechte Hand des Bösen', desc: '60%+ Winrate als Minion bei mindestens 4 Spielen.' },
+                { emoji: '🙈', name: 'Nutzloser Handlanger', desc: '30% oder weniger Winrate als Minion — der Dämon hätte einen besseren verdient.' },
+                { emoji: '🗡️', name: 'Böse Schachfigur', desc: 'Mindestens 20% aller Spiele als Minion gespielt (min. 5 Spiele).' },
+              ]
+            },
+            {
+              group: '😈 Dämon',
+              color: 'border-rose-600',
+              titles: [
+                { emoji: '👹', name: 'Dämonenkönig', desc: 'Überdurchschnittlich oft Dämon gespielt (mind. 3 Spiele, 1,5× mehr als der Schnitt).' },
+                { emoji: '🔱', name: 'Dämonenfürst', desc: '60%+ Winrate als Dämon bei mindestens 5 Spielen.' },
+                { emoji: '💔', name: 'Gefallener Dämon', desc: '30% oder weniger Winrate als Dämon — die Stadt hat immer gewonnen.' },
+              ]
+            },
+            {
+              group: '⚖️ Team',
+              color: 'border-yellow-500',
+              titles: [
+                { emoji: '😇', name: 'Reinste Seele', desc: 'Mindestens 80% der Spiele auf Team Gut gespielt (min. 5 Spiele).' },
+                { emoji: '😈', name: 'Böse bis ins Blut', desc: 'Mindestens 20% der Spiele auf Team Böse gespielt (min. 5 Spiele).' },
+                { emoji: '✝️', name: 'Heiliger', desc: 'Noch nie auf Team Böse gespielt (min. 5 Spiele).' },
+                { emoji: '🗡️', name: 'Böse Machiavellist', desc: '60%+ Winrate auf Team Böse bei mindestens 5 Spielen.' },
+                { emoji: '🛡️', name: 'Schutzengel', desc: '60%+ Winrate auf Team Gut bei mindestens 5 Spielen.' },
+              ]
+            },
+            {
+              group: '📊 Gesamtwinrate',
+              color: 'border-cyan-500',
+              titles: [
+                { emoji: '🏆', name: 'Unaufhaltbar', desc: '60%+ Gesamtwinrate bei mindestens 8 Spielen.' },
+                { emoji: '🪦', name: 'Tragische Figur', desc: '30% oder weniger Gesamtwinrate bei mindestens 8 Spielen.' },
+              ]
+            },
+            {
+              group: '🔥 Serien',
+              color: 'border-amber-500',
+              titles: [
+                { emoji: '🔥', name: 'Xer Siegesserie', desc: 'Gerade mindestens 5 Siege in Folge — die aktuelle Serie läuft noch.' },
+                { emoji: '❄️', name: 'Xer Pechsträhne', desc: 'Gerade mindestens 5 Niederlagen in Folge — die aktuelle Serie läuft noch.' },
+                { emoji: '⚡', name: 'Xer Blitzserie', desc: 'Längste jemals erzielte Siegesserie beträgt mindestens 7 Spiele.' },
+                { emoji: '😭', name: 'Xfacher Pechvogel', desc: 'Längste jemals erlebte Niederlagenserie beträgt mindestens 6 Spiele.' },
+              ]
+            },
+            {
+              group: '📖 Storyteller & Erfahrung',
+              color: 'border-gray-400',
+              titles: [
+                { emoji: '📖', name: 'Meister-Storyteller', desc: 'Mindestens 5 Spiele als Storyteller geleitet und mindestens 25% aller Runden als ST.' },
+                { emoji: '📖', name: 'Storyteller', desc: 'Mindestens 3 Spiele als Storyteller geleitet.' },
+                { emoji: '🧙', name: 'Veteran', desc: 'Mindestens 30 Spiele insgesamt gespielt.' },
+                { emoji: '⚔️', name: 'Erfahren', desc: 'Mindestens 15 Spiele insgesamt gespielt.' },
+              ]
+            },
+          ];
+
+          return (
+            <div>
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold text-white flex items-center gap-2 mb-1">🏅 Alle Titel</h2>
+                <p className="text-gray-400 text-sm">Titel werden dynamisch vergeben — sie erscheinen nur wenn die Bedingung aktuell erfüllt ist. Hover über einen Titel im Spielerprofil zeigt den genauen Grund.</p>
+              </div>
+
+              <div className="space-y-6">
+                {ALL_TITLES.map(group => (
+                  <div key={group.group} className={`bg-gray-800 rounded-xl border-l-4 ${group.color} border border-gray-700 overflow-hidden`}>
+                    <div className="px-5 py-3 border-b border-gray-700 bg-gray-900 bg-opacity-50">
+                      <h3 className="font-bold text-white text-base">{group.group}</h3>
+                    </div>
+                    <div className="divide-y divide-gray-700">
+                      {group.titles.map(t => (
+                        <div key={t.name} className="px-5 py-4 flex items-start gap-4 hover:bg-gray-700 hover:bg-opacity-30 transition-colors">
+                          <span className="text-2xl flex-shrink-0 mt-0.5">{t.emoji}</span>
+                          <div>
+                            <div className="font-semibold text-white mb-0.5">{t.name}</div>
+                            <div className="text-sm text-gray-400">{t.desc}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           );
