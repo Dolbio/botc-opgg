@@ -642,8 +642,20 @@ const BotCStatsTracker = () => {
     if (Object.keys(roleCounts).length >= 20 && total >= 10) {
       titles.push({ emoji: '🎲', text: 'Tausendsassa', tip: `${Object.keys(roleCounts).length} verschiedene Rollen gespielt` });
     }
-    const neverEvil = evilPlayed.length === 0 && total >= 5;
-    if (neverEvil) titles.push({ emoji: '✝️', text: 'Heiliger', tip: 'Noch nie böse gespielt' });
+    // All-time consecutive team streaks
+    let maxGoodStreak = 0, maxEvilStreak = 0, curGS = 0, curES = 0;
+    sorted.forEach(p => {
+      if (p.team === 'Gut') { curGS++; curES = 0; }
+      else { curES++; curGS = 0; }
+      maxGoodStreak = Math.max(maxGoodStreak, curGS);
+      maxEvilStreak = Math.max(maxEvilStreak, curES);
+    });
+    if (maxGoodStreak >= 5) {
+      titles.push({ emoji: '✝️', text: `${maxGoodStreak}× reines Gewissen`, tip: `Längste Gut-Serie: ${maxGoodStreak} Spiele in Folge auf Team Gut` });
+    }
+    if (maxEvilStreak >= 3) {
+      titles.push({ emoji: '🩸', text: `${maxEvilStreak}× Dunkelphase`, tip: `Längste Böse-Serie: ${maxEvilStreak} Spiele hintereinander auf Team Böse` });
+    }
 
     return titles;
   };
@@ -3867,7 +3879,8 @@ const BotCStatsTracker = () => {
               titles: [
                 { emoji: '😇', name: 'Reinste Seele', desc: 'Mindestens 80% der Spiele auf Team Gut gespielt (min. 5 Spiele).' },
                 { emoji: '😈', name: 'Böse bis ins Blut', desc: 'Mindestens 25% der Spiele auf Team Böse gespielt (min. 5 Spiele).' },
-                { emoji: '✝️', name: 'Heiliger', desc: 'Noch nie auf Team Böse gespielt (min. 5 Spiele).' },
+                { emoji: '✝️', name: 'Xx reines Gewissen', desc: 'Jemals mindestens 5 Spiele in Folge auf Team Gut gespielt.' },
+                { emoji: '🩸', name: 'Xx Dunkelphase', desc: 'Jemals mindestens 3 Spiele hintereinander auf Team Böse gespielt.' },
                 { emoji: '🗡️', name: 'Böse Machiavellist', desc: '60%+ Winrate auf Team Böse bei mindestens 5 Spielen.' },
                 { emoji: '🛡️', name: 'Schutzengel', desc: '60%+ Winrate auf Team Gut bei mindestens 5 Spielen.' },
               ]
