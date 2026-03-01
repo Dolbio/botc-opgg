@@ -41,6 +41,7 @@ const BotCStatsTracker = () => {
   const [expandedMatch, setExpandedMatch] = useState(null);
   const [selectedSeason, setSelectedSeason] = useState('all');
   const [selectedScript, setSelectedScript] = useState('all');
+  const [playerMinGames, setPlayerMinGames] = useState(5);
   const [selectedTeammate, setSelectedTeammate] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [showImport, setShowImport] = useState(false);
@@ -76,6 +77,12 @@ const BotCStatsTracker = () => {
   const [rrSeason, setRrSeason] = useState('all');
   const [rrScript, setRrScript] = useState('all');
   const [rrMinGames, setRrMinGames] = useState(1);
+  const [rrRoleSearch, setRrRoleSearch] = useState('');
+  const [amScript, setAmScript] = useState('all');
+  const [amPlayer, setAmPlayer] = useState('all');
+  const [amRole, setAmRole] = useState('');
+  const [amSeason, setAmSeason] = useState('all');
+  const [amExpanded, setAmExpanded] = useState(null);
   const [rrSort, setRrSort] = useState('winrate');
   const [rrSortDir, setRrSortDir] = useState('desc');
   const [rrTeam, setRrTeam] = useState('all');
@@ -415,6 +422,178 @@ const BotCStatsTracker = () => {
     return String(year - 2024);                     // Feb 2026 → S2, Feb 2027 → S3
   };
 
+  const getPlayerTitles = (playerName) => {
+    const allMatches = getAllMatches();
+    const playerMatches = allMatches.filter(m => m.players.some(p => p.name === playerName));
+    const played = playerMatches.flatMap(m => {
+      const p = m.players.find(x => x.name === playerName);
+      return p ? [{ ...p, date: m.date, id: m.id }] : [];
+    }).sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id);
+
+    if (played.length === 0) return [];
+
+    const allPlayers = [...new Set(allMatches.flatMap(m => m.players.map(p => p.name)))];
+    const titles = [];
+
+    // --- Role counts ---
+    const roleCounts = {};
+    played.forEach(p => { roleCounts[p.role] = (roleCounts[p.role] || 0) + 1; });
+
+    // --- Category counts ---
+    const catCounts = {};
+    played.forEach(p => {
+      const cat = getRoleCategory(p.role);
+      catCounts[cat] = (catCounts[cat] || 0) + 1;
+    });
+
+    // --- Winrates by role ---
+    const roleStats = {};
+    played.forEach(p => {
+      if (!roleStats[p.role]) roleStats[p.role] = { wins: 0, total: 0 };
+      roleStats[p.role].total++;
+      if (p.result === 'Sieg') roleStats[p.role].wins++;
+    });
+
+    // --- Global stats ---
+    const total = played.length;
+    const wins = played.filter(p => p.result === 'Sieg').length;
+    const winrate = total > 0 ? wins / total : 0;
+    const evilPlayed = played.filter(p => p.team === 'Böse');
+    const goodPlayed = played.filter(p => p.team === 'Gut');
+    const stGames = allMatches.filter(m => m.storyteller === playerName).length;
+
+    // --- Streaks ---
+    const sorted = [...played].sort((a, b) => new Date(a.date) - new Date(b.date) || a.id - b.id);
+    let curWin = 0, curLose = 0, maxWin = 0, maxLose = 0;
+    sorted.forEach(p => {
+      if (p.result === 'Sieg') { curWin++; curLose = 0; } else { curLose++; curWin = 0; }
+      maxWin = Math.max(maxWin, curWin);
+      maxLose = Math.max(maxLose, curLose);
+    });
+    // Current streak (last games)
+    const last = sorted[sorted.length - 1];
+    let curStreak = 0;
+    for (let i = sorted.length - 1; i >= 0; i--) {
+      if (sorted[i].result === last.result) curStreak++; else break;
+    }
+
+    // Helper: how many other players have MORE of this role
+    const othersWithMoreRole = (role, count) =>
+      allPlayers.filter(n => n !== playerName).filter(n => {
+        const c = allMatches.filter(m => m.players.some(p => p.name === n && p.role === role)).length;
+        return c > count;
+      }).length;
+
+    // Helper: is this player top-N% for a metric among all players
+    const allPlayerStats = allPlayers.map(n => {
+      const ms = allMatches.filter(m => m.players.some(p => p.name === n));
+      const pl = ms.flatMap(m => { const p = m.players.find(x => x.name === n); return p ? [p] : []; });
+      return { name: n, total: pl.length, evil: pl.filter(p => p.team === 'Böse').length, wins: pl.filter(p => p.result === 'Sieg').length };
+    });
+
+    // ── ROLE SPECIALIST titles ──
+    // Most played role: if player leads or ties for most plays of that role
+    const topRole = Object.entries(roleCounts).sort((a,b) => b[1]-a[1])[0];
+    if (topRole && topRole[1] >= 3 && othersWithMoreRole(topRole[0], topRole[1]) === 0) {
+      titles.push({ emoji: '🎭', text: `${topRole[0]}-Stammgast`, tip: `Meiste Spiele als ${topRole[0]} (${topRole[1]}×)` });
+    }
+
+    // Perfect winrate with a role (100%, min 3 games)
+    Object.entries(roleStats).forEach(([role, s]) => {
+      if (s.total >= 3 && s.wins === s.total) {
+        titles.push({ emoji: '🌟', text: `${role}-Legende`, tip: `100% Winrate als ${role} (${s.total} Spiele)` });
+      }
+    });
+
+    // Terrible winrate with a role (0%, min 3 games)
+    Object.entries(roleStats).forEach(([role, s]) => {
+      if (s.total >= 3 && s.wins === 0) {
+        titles.push({ emoji: '💀', text: `${role}-Fluch`, tip: `0% Winrate als ${role} (${s.total} Spiele)` });
+      }
+    });
+
+    // ── TEAM titles ──
+    const evilRatio = total > 0 ? evilPlayed.length / total : 0;
+    const goodRatio = total > 0 ? goodPlayed.length / total : 0;
+
+    if (evilRatio >= 0.2 && total >= 5) {
+      titles.push({ emoji: '😈', text: 'Böse bis ins Blut', tip: `${Math.round(evilRatio*100)}% der Spiele auf Team Böse` });
+    } else if (goodRatio >= 0.8 && total >= 5) {
+      titles.push({ emoji: '😇', text: 'Reinste Seele', tip: `${Math.round(goodRatio*100)}% der Spiele auf Team Gut` });
+    }
+
+    // Often demon
+    const demonRoles = ['Imp', 'Fang Gu', 'Vigormortis', 'Vortox', 'Zombuul', 'Pukka', 'Shabaloth', 'Po', 'Lil\' Monsta', 'Lleech', 'Al-Hadikhia', 'Leviathan', 'Riot'];
+    const demonGames = played.filter(p => demonRoles.includes(p.role)).length;
+    const avgDemon = allPlayers.filter(n => n !== playerName).map(n =>
+      allMatches.filter(m => m.players.some(p => p.name === n && demonRoles.includes(p.role))).length
+    );
+    const avgDemonOthers = avgDemon.length > 0 ? avgDemon.reduce((a,b)=>a+b,0)/avgDemon.length : 0;
+    if (demonGames >= 3 && demonGames > avgDemonOthers * 1.5) {
+      titles.push({ emoji: '👹', text: 'Dämonenkönig', tip: `${demonGames}× Dämon gespielt — überdurchschnittlich oft` });
+    }
+
+    // ── WINRATE titles ──
+    if (total >= 8 && winrate >= 0.6) {
+      titles.push({ emoji: '🏆', text: 'Unaufhaltbar', tip: `${Math.round(winrate*100)}% Gesamtwinrate (${total} Spiele)` });
+    } else if (total >= 8 && winrate <= 0.3) {
+      titles.push({ emoji: '🪦', text: 'Tragische Figur', tip: `${Math.round(winrate*100)}% Gesamtwinrate (${total} Spiele)` });
+    }
+
+    // ── STREAK titles ──
+    if (curStreak >= 5 && last.result === 'Sieg') {
+      titles.push({ emoji: '🔥', text: `${curStreak}er Siegesserie`, tip: `Gerade ${curStreak} Siege in Folge!` });
+    } else if (curStreak >= 5 && last.result === 'Niederlage') {
+      titles.push({ emoji: '❄️', text: `${curStreak}er Pechsträhne`, tip: `Gerade ${curStreak} Niederlagen in Folge` });
+    }
+    if (maxWin >= 7) {
+      titles.push({ emoji: '⚡', text: `${maxWin}er Blitzserie`, tip: `Längste Siegesserie: ${maxWin} Spiele` });
+    }
+    if (maxLose >= 6) {
+      titles.push({ emoji: '😭', text: `${maxLose}facher Pechvogel`, tip: `Längste Niederlagenserie: ${maxLose} Spiele` });
+    }
+
+    // ── STORYTELLER ──
+    const stRatio = (stGames + total) > 0 ? stGames / (stGames + total) : 0;
+    if (stGames >= 5 && stRatio >= 0.25) {
+      titles.push({ emoji: '📖', text: 'Meister-Storyteller', tip: `${stGames}× Storyteller — ${Math.round(stRatio*100)}% der Runden` });
+    } else if (stGames >= 3) {
+      titles.push({ emoji: '📖', text: 'Storyteller', tip: `${stGames}× Storyteller gespielt` });
+    }
+
+    // ── EXPERIENCE titles ──
+    if (total >= 30) {
+      titles.push({ emoji: '🧙', text: 'Veteran', tip: `${total} Spiele insgesamt` });
+    } else if (total >= 15) {
+      titles.push({ emoji: '⚔️', text: 'Erfahren', tip: `${total} Spiele insgesamt` });
+    }
+
+    // ── CATEGORY specialist ──
+    const topCat = Object.entries(catCounts).sort((a,b)=>b[1]-a[1])[0];
+    if (topCat && topCat[1] >= 5 && topCat[1] / total >= 0.5) {
+      const cfg = CATEGORY_DISPLAY[topCat[0]];
+      if (cfg) titles.push({ emoji: cfg.emoji, text: `${cfg.label}-Spezialist`, tip: `${Math.round(topCat[1]/total*100)}% der Spiele als ${cfg.label}` });
+    }
+
+    // ── EVIL WINRATE ──
+    const evilWins2 = evilPlayed.filter(p => p.result === 'Sieg').length;
+    if (evilPlayed.length >= 5 && evilWins2 / evilPlayed.length >= 0.6) {
+      titles.push({ emoji: '🗡️', text: 'Böse Machiavellist', tip: `${Math.round(evilWins2/evilPlayed.length*100)}% Winrate auf Team Böse` });
+    }
+    if (goodPlayed.length >= 5 && (goodPlayed.filter(p=>p.result==='Sieg').length / goodPlayed.length) >= 0.6) {
+      titles.push({ emoji: '🛡️', text: 'Schutzengel', tip: `${Math.round(goodPlayed.filter(p=>p.result==='Sieg').length/goodPlayed.length*100)}% Winrate auf Team Gut` });
+    }
+
+    // ── FUN/RARE ──
+    if (Object.keys(roleCounts).length >= 10 && total >= 10) {
+      titles.push({ emoji: '🎲', text: 'Tausendsassa', tip: `${Object.keys(roleCounts).length} verschiedene Rollen gespielt` });
+    }
+    const neverEvil = evilPlayed.length === 0 && total >= 5;
+    if (neverEvil) titles.push({ emoji: '✝️', text: 'Heiliger', tip: 'Noch nie böse gespielt' });
+
+    return titles.slice(0, 5); // max 5 titles per player
+  };
+
   const getAvailableYears = () => {
     const seasons = new Set();
     getAllMatches().forEach(m => seasons.add(getMatchSeason(m.date)));
@@ -616,9 +795,24 @@ const BotCStatsTracker = () => {
 
     const scripts = ['__all__', ...Array.from(new Set(filtered.map(m => m.script))).sort()];
 
+    const buildPodium = (playerMap) => {
+      const sorted = Object.values(playerMap)
+        .filter(p => p.total >= hofMinGames)
+        .map(p => ({ ...p, winrate: parseFloat(((p.wins / p.total) * 100).toFixed(1)) }))
+        .sort((a, b) => b.winrate - a.winrate || b.total - a.total);
+      // Assign ranks with ties, collect up to 3 distinct rank groups
+      const groups = []; // [{rank, players}]
+      sorted.forEach((p, i) => {
+        const prev = sorted[i-1];
+        const sameAsPrev = prev && p.winrate === prev.winrate && p.total === prev.total && p.wins === prev.wins;
+        if (!sameAsPrev) groups.push({ players: [] });
+        groups[groups.length-1].players.push(p);
+      });
+      return groups.slice(0, 3); // up to 3 medal groups
+    };
+
     return scripts.map(script => {
       const scriptMatches = script === '__all__' ? filtered : filtered.filter(m => m.script === script);
-
       const playerMap = {};
       scriptMatches.forEach(match => {
         match.players.forEach(p => {
@@ -627,14 +821,7 @@ const BotCStatsTracker = () => {
           if (p.result === 'Sieg') playerMap[p.name].wins++;
         });
       });
-
-      const ranked = Object.values(playerMap)
-        .filter(p => p.total >= hofMinGames)
-        .map(p => ({ ...p, winrate: parseFloat(((p.wins / p.total) * 100).toFixed(1)) }))
-        .sort((a, b) => b.winrate - a.winrate || b.total - a.total)
-        .slice(0, 3);
-
-      return { script, label: script === '__all__' ? 'Alle Scripts' : script, top3: ranked };
+      return { script, label: script === '__all__' ? 'Alle Scripts' : script, podium: buildPodium(playerMap) };
     });
   };
 
@@ -644,6 +831,21 @@ const BotCStatsTracker = () => {
     const filtered = hofSeason === 'all'
       ? allMatches
       : allMatches.filter(m => getMatchSeason(m.date) === hofSeason);
+
+    const buildPodium = (playerMap) => {
+      const sorted = Object.values(playerMap)
+        .filter(p => p.total >= hofMinGames)
+        .map(p => ({ ...p, winrate: parseFloat(((p.wins / p.total) * 100).toFixed(1)) }))
+        .sort((a, b) => b.winrate - a.winrate || b.total - a.total);
+      const groups = [];
+      sorted.forEach((p, i) => {
+        const prev = sorted[i-1];
+        const sameAsPrev = prev && p.winrate === prev.winrate && p.total === prev.total && p.wins === prev.wins;
+        if (!sameAsPrev) groups.push({ players: [] });
+        groups[groups.length-1].players.push(p);
+      });
+      return groups.slice(0, 3);
+    };
 
     return Object.entries(CATEGORY_DISPLAY).map(([catKey, cfg]) => {
       const playerMap = {};
@@ -655,12 +857,7 @@ const BotCStatsTracker = () => {
           if (p.result === 'Sieg') playerMap[p.name].wins++;
         });
       });
-      const top3 = Object.values(playerMap)
-        .filter(p => p.total >= hofMinGames)
-        .map(p => ({ ...p, winrate: parseFloat(((p.wins / p.total) * 100).toFixed(1)) }))
-        .sort((a, b) => b.winrate - a.winrate || b.total - a.total)
-        .slice(0, 3);
-      return { catKey, label: cfg.label, emoji: cfg.emoji, color: cfg.color, top3 };
+      return { catKey, label: cfg.label, emoji: cfg.emoji, color: cfg.color, podium: buildPodium(playerMap) };
     });
   };
 
@@ -1007,7 +1204,28 @@ const BotCStatsTracker = () => {
     return <span className="text-gray-500 font-mono text-sm w-[18px] text-center">{rank}</span>;
   };
 
-  const filteredPlayers = availablePlayers.filter(p => p.name.toLowerCase().includes(searchQuery.toLowerCase()));
+  // Assign ranks with ties: players with same key values share the same rank
+  const assignRanks = (arr, getKey) => {
+    let rank = 1;
+    return arr.map((item, i) => {
+      if (i > 0 && getKey(arr[i]) !== getKey(arr[i-1])) rank = i + 1;
+      return { ...item, rank };
+    });
+  };
+
+  // Given ranked array, map each distinct rank to a medal slot (1st group=🥇, 2nd=🥈, 3rd=🥉)
+  const rankToMedalSlot = (rankedArr) => {
+    const medals = ['🥇','🥈','🥉'];
+    const uniqueRanks = [...new Set(rankedArr.map(p => p.rank))].sort((a,b)=>a-b);
+    const map = {};
+    uniqueRanks.slice(0,3).forEach((r,i) => { map[r] = medals[i]; });
+    return map;
+  };
+
+  const filteredPlayers = availablePlayers.filter(p => {
+    const games = getAllMatches().filter(m => m.players.some(pl => pl.name === p.name)).length;
+    return games >= playerMinGames && p.name.toLowerCase().includes(searchQuery.toLowerCase());
+  });
 
   if (showImport) {
     return (
@@ -1125,6 +1343,12 @@ const BotCStatsTracker = () => {
             className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'session' ? 'bg-gray-800 text-cyan-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
           >
             <Calendar size={16} />Letzte Session
+          </button>
+          <button
+            onClick={() => setActivePage('allmatches')}
+            className={`flex items-center gap-2 px-5 py-2.5 rounded-t-lg font-semibold text-sm transition-all ${activePage === 'allmatches' ? 'bg-gray-800 text-indigo-400 border border-b-0 border-gray-700' : 'text-gray-400 hover:text-white'}`}
+          >
+            <Scroll size={16} />Alle Spiele
           </button>
         </div>
 
@@ -1265,15 +1489,25 @@ const BotCStatsTracker = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {leaderboardData.map((player, idx) => {
+                    {(() => {
+                      const lbRanked = assignRanks(leaderboardData, p => {
+                        const v = lbTeamFilter === 'good' ? p.goodWinrate : lbTeamFilter === 'evil' ? p.evilWinrate : p.winrate;
+                        return `${v}-${p.wins}-${p.total}`;
+                      });
+                      const medalMap = rankToMedalSlot(lbRanked);
+                      return lbRanked.map((player) => {
                       const dispWinrate = lbTeamFilter === 'good' ? player.goodWinrate : lbTeamFilter === 'evil' ? player.evilWinrate : player.winrate;
                       return (
                         <tr key={player.id}
                           onClick={() => handlePlayerClick(player.name)}
-                          className={`border-b border-gray-700 cursor-pointer transition-all hover:bg-purple-900 hover:bg-opacity-20 ${selectedPlayer?.name === player.name ? 'bg-purple-900 bg-opacity-30' : idx % 2 === 0 ? 'bg-gray-800' : 'bg-gray-850'}`}
+                          className={`border-b border-gray-700 cursor-pointer transition-all hover:bg-purple-900 hover:bg-opacity-20 ${selectedPlayer?.name === player.name ? 'bg-purple-900 bg-opacity-30' : (player.rank - 1) % 2 === 0 ? 'bg-gray-800' : 'bg-gray-850'}`}
                         >
                           <td className="py-3 px-4">
-                            <div className="flex items-center justify-center">{getRankIcon(idx + 1)}</div>
+                            <div className="flex items-center justify-center">
+                              {medalMap[player.rank]
+                                ? <span className="text-xl">{medalMap[player.rank]}</span>
+                                : getRankIcon(player.rank)}
+                            </div>
                           </td>
                           <td className="py-3 px-4">
                             <div className="flex items-center gap-2">
@@ -1367,7 +1601,7 @@ const BotCStatsTracker = () => {
                           <td className="py-3 px-4 text-center text-purple-300 font-mono">{player.storytellerGames}</td>
                         </tr>
                       );
-                    })}
+                    }); })()}
                     {leaderboardData.length === 0 && (
                       <tr><td colSpan={16} className="py-12 text-center text-gray-400">Keine Spieler gefunden mit den aktuellen Filtern.</td></tr>
                     )}
@@ -1987,6 +2221,14 @@ const BotCStatsTracker = () => {
                     ? `${rows.length} Spieler mit ${rrMinGames}+ Spielen qualifiziert`
                     : `Wähle ${rrMode === 'role' ? 'eine Rolle' : 'eine Kategorie'} aus der Liste unten`}
                 </p>
+                {rrMode === 'role' && (
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-2.5 text-gray-500" />
+                    <input type="text" placeholder="Rolle suchen... (z.B. Imp, A...)"
+                      value={rrRoleSearch} onChange={e => setRrRoleSearch(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg pl-8 pr-4 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-orange-500" />
+                  </div>
+                )}
               </div>
 
               {/* ── Mode-specific Highlights (collapsible) ── */}
@@ -2070,11 +2312,13 @@ const BotCStatsTracker = () => {
                 <div className="w-56 flex-shrink-0">
                   <div className="bg-gray-800 rounded-lg border border-gray-700 overflow-hidden sticky top-4">
                     <div className="px-3 py-2.5 border-b border-gray-700 text-xs text-gray-400 font-semibold uppercase tracking-wide">
-                      {rrMode === 'role' ? `${allRoles.length} Rollen` : 'Kategorien'}
+                      {rrMode === 'role'
+                        ? `${allRoles.filter(r => r.toLowerCase().includes(rrRoleSearch.toLowerCase())).length} Rollen`
+                        : 'Kategorien'}
                     </div>
                     <div className="overflow-y-auto max-h-[560px]">
                       {rrMode === 'role' ? (
-                        allRoles.map(role => {
+                        allRoles.filter(r => r.toLowerCase().includes(rrRoleSearch.toLowerCase())).map(role => {
                           const catKey = getRoleCategory(role);
                           const cfg = CATEGORY_DISPLAY[catKey] || CATEGORY_DISPLAY.Sonstige;
                           return (
@@ -2148,81 +2392,96 @@ const BotCStatsTracker = () => {
                         );
                       })()}
 
-                      {rows.length >= 1 && (
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
-                          {rows.slice(0,3).map((p, i) => (
-                            <div key={p.name} onClick={() => handlePlayerClick(p.name)}
-                              className={`bg-gray-800 rounded-xl p-4 cursor-pointer hover:scale-105 transition-all border ${i===0?'border-yellow-600 bg-yellow-950 bg-opacity-20':i===1?'border-gray-500':'border-amber-700 bg-amber-950 bg-opacity-10'}`}>
-                              <div className="flex items-start justify-between mb-2">
-                                <span className="text-2xl">{medals[i]}</span>
-                                <span className={`text-2xl font-black ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
-                              </div>
-                              <div className="font-bold text-white mb-1">👤 {p.name}</div>
-                              <div className="text-xs text-gray-400">{p.wins}S / {p.losses}N • {p.games} Spiele</div>
-                              {rrMode === 'category' && p.roles && (
-                                <div className="text-xs text-gray-500 mt-1 truncate" title={p.roles}>{p.roles}</div>
-                              )}
-                              <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
-                                <div className="h-1.5 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500" style={{width:`${p.winrate}%`}}/>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {rows.length > 0 && (
-                        <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                          <table className="w-full text-sm">
-                            <thead>
-                              <tr className="bg-gray-900 border-b border-gray-700">
-                                <th className="text-center py-3 px-3 text-gray-400 w-10">#</th>
-                                <th className="text-left py-3 px-4 text-gray-400">Spieler</th>
-                                {rrMode === 'category' && <th className="text-left py-3 px-4 text-gray-400">Rollen</th>}
-                                <th className="text-center py-3 px-4">
-                                  <button className="flex items-center mx-auto hover:text-white text-gray-400" onClick={() => handleRrSort('games')}>Spiele<RrSortIcon k="games"/></button>
-                                </th>
-                                <th className="text-center py-3 px-4 text-green-400">
-                                  <button className="flex items-center mx-auto hover:text-white" onClick={() => handleRrSort('wins')}>Siege<RrSortIcon k="wins"/></button>
-                                </th>
-                                <th className="text-center py-3 px-4 text-red-400">Niedr.</th>
-                                <th className="text-center py-3 px-4">
-                                  <button className="flex items-center mx-auto hover:text-white text-orange-400 font-semibold" onClick={() => handleRrSort('winrate')}>
-                                    <Award size={13} className="mr-1"/>Winrate<RrSortIcon k="winrate"/>
-                                  </button>
-                                </th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {rows.map((p, idx) => (
-                                <tr key={p.name} onClick={() => handlePlayerClick(p.name)}
-                                  className={`border-b border-gray-700 cursor-pointer hover:bg-gray-700 transition-colors ${idx < 3 ? 'bg-gray-800' : idx % 2 === 0 ? 'bg-gray-800' : ''}`}>
-                                  <td className="py-3 px-3 text-center">
-                                    {idx < 3
-                                      ? <span className="text-lg">{medals[idx]}</span>
-                                      : <span className="text-gray-500 font-mono text-sm">#{idx+1}</span>}
-                                  </td>
-                                  <td className="py-3 px-4 font-semibold text-white">👤 {p.name}</td>
-                                  {rrMode === 'category' && (
-                                    <td className="py-3 px-4 text-xs text-gray-400 max-w-[180px] truncate" title={p.roles}>{p.roles}</td>
-                                  )}
-                                  <td className="py-3 px-4 text-center font-mono">{p.games}</td>
-                                  <td className="py-3 px-4 text-center font-mono text-green-400">{p.wins}</td>
-                                  <td className="py-3 px-4 text-center font-mono text-red-400">{p.losses}</td>
-                                  <td className="py-3 px-4 text-center">
-                                    <div className="flex flex-col items-center gap-1">
-                                      <span className={`font-bold ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
-                                      <div className="w-14 h-1.5 bg-gray-700 rounded-full overflow-hidden">
-                                        <div className={`h-full rounded-full ${p.winrate > 50 ? 'bg-green-500' : p.winrate === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
-                                          style={{width:`${p.winrate}%`}}/>
+                      {rows.length >= 1 && (() => {
+                        const rrRanked = assignRanks(rows, p => `${p.winrate}-${p.wins}-${p.losses}`);
+                        const rrMedalMap = rankToMedalSlot(rrRanked);
+                        const medalGroups = [1,2,3].map(rank => rrRanked.filter(p => p.rank === rank)).filter(g => g.length > 0);
+                        const cardBg = ['border-yellow-600 bg-yellow-950 bg-opacity-20','border-gray-500','border-amber-700 bg-amber-950 bg-opacity-10'];
+                        return (
+                          <>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
+                              {medalGroups.map((group, i) => {
+                                const rep = group[0];
+                                return (
+                                  <div key={i} className={`bg-gray-800 rounded-xl p-4 border ${cardBg[i]}`}>
+                                    <div className="flex items-start justify-between mb-2">
+                                      <div className="flex items-center gap-1">
+                                        <span className="text-2xl">{medals[i]}</span>
+                                        {group.length > 1 && <span className="text-xs text-gray-400">({group.length}×)</span>}
                                       </div>
+                                      <span className={`text-2xl font-black ${rep.winrate > 50 ? 'text-green-400' : rep.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{rep.winrate}%</span>
                                     </div>
-                                  </td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      )}
+                                    <div className="space-y-0.5 mb-1">
+                                      {group.map(p => (
+                                        <button key={p.name} onClick={() => handlePlayerClick(p.name)} className="block font-bold text-white hover:text-yellow-200 transition-colors">👤 {p.name}</button>
+                                      ))}
+                                    </div>
+                                    <div className="text-xs text-gray-400">{rep.wins}S / {rep.losses}N • {rep.games} Spiele</div>
+                                    {rrMode === 'category' && rep.roles && (
+                                      <div className="text-xs text-gray-500 mt-1 truncate" title={rep.roles}>{rep.roles}</div>
+                                    )}
+                                    <div className="w-full bg-gray-700 rounded-full h-1.5 mt-2">
+                                      <div className="h-1.5 rounded-full bg-gradient-to-r from-orange-500 to-yellow-500" style={{width:`${rep.winrate}%`}}/>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                              <table className="w-full text-sm">
+                                <thead>
+                                  <tr className="bg-gray-900 border-b border-gray-700">
+                                    <th className="text-center py-3 px-3 text-gray-400 w-10">#</th>
+                                    <th className="text-left py-3 px-4 text-gray-400">Spieler</th>
+                                    {rrMode === 'category' && <th className="text-left py-3 px-4 text-gray-400">Rollen</th>}
+                                    <th className="text-center py-3 px-4">
+                                      <button className="flex items-center mx-auto hover:text-white text-gray-400" onClick={() => handleRrSort('games')}>Spiele<RrSortIcon k="games"/></button>
+                                    </th>
+                                    <th className="text-center py-3 px-4 text-green-400">
+                                      <button className="flex items-center mx-auto hover:text-white" onClick={() => handleRrSort('wins')}>Siege<RrSortIcon k="wins"/></button>
+                                    </th>
+                                    <th className="text-center py-3 px-4 text-red-400">Niedr.</th>
+                                    <th className="text-center py-3 px-4">
+                                      <button className="flex items-center mx-auto hover:text-white text-orange-400 font-semibold" onClick={() => handleRrSort('winrate')}>
+                                        <Award size={13} className="mr-1"/>Winrate<RrSortIcon k="winrate"/>
+                                      </button>
+                                    </th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {rrRanked.map((p) => (
+                                    <tr key={p.name} onClick={() => handlePlayerClick(p.name)}
+                                      className={`border-b border-gray-700 cursor-pointer hover:bg-gray-700 transition-colors ${(p.rank - 1) % 2 === 0 ? 'bg-gray-800' : ''}`}>
+                                      <td className="py-3 px-3 text-center">
+                                        {rrMedalMap[p.rank]
+                                          ? <span className="text-lg">{rrMedalMap[p.rank]}</span>
+                                          : <span className="text-gray-500 font-mono text-sm">#{p.rank}</span>}
+                                      </td>
+                                      <td className="py-3 px-4 font-semibold text-white">👤 {p.name}</td>
+                                      {rrMode === 'category' && (
+                                        <td className="py-3 px-4 text-xs text-gray-400 max-w-[180px] truncate" title={p.roles}>{p.roles}</td>
+                                      )}
+                                      <td className="py-3 px-4 text-center font-mono">{p.games}</td>
+                                      <td className="py-3 px-4 text-center font-mono text-green-400">{p.wins}</td>
+                                      <td className="py-3 px-4 text-center font-mono text-red-400">{p.losses}</td>
+                                      <td className="py-3 px-4 text-center">
+                                        <div className="flex flex-col items-center gap-1">
+                                          <span className={`font-bold ${p.winrate > 50 ? 'text-green-400' : p.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>{p.winrate}%</span>
+                                          <div className="w-14 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+                                            <div className={`h-full rounded-full ${p.winrate > 50 ? 'bg-green-500' : p.winrate === 50 ? 'bg-yellow-500' : 'bg-red-500'}`}
+                                              style={{width:`${p.winrate}%`}}/>
+                                          </div>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
+                        );
+                      })()}
 
                       {rows.length === 0 && (
                         <div className="flex items-center justify-center h-40 bg-gray-800 rounded-xl border border-gray-700 border-dashed">
@@ -2249,34 +2508,44 @@ const BotCStatsTracker = () => {
             'bg-amber-900 bg-opacity-30 border-amber-700',
           ];
 
-          const PodiumCard = ({ player, i, extra }) => (
-            <div
-              onClick={() => handlePlayerClick(player.name)}
-              className={`flex-1 rounded-xl border p-5 cursor-pointer hover:scale-105 transition-transform ${medalBg[i]}`}
-              style={{ flexGrow: i === 0 ? 1.4 : 1 }}
-            >
-              <div className="flex items-start justify-between mb-3">
-                <span className="text-3xl">{medals[i]}</span>
-                <div className="text-right">
-                  <div className={`text-3xl font-black ${player.winrate > 50 ? 'text-green-400' : player.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>
-                    {player.winrate}%
+          // A podium group: one medal slot that may contain multiple tied players
+          const PodiumGroup = ({ group, i }) => {
+            const rep = group.players[0];
+            const tied = group.players.length > 1;
+            return (
+              <div className={`flex-1 rounded-xl border p-5 ${medalBg[i]}`} style={{ flexGrow: i === 0 ? 1.4 : 1 }}>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex items-center gap-1 flex-wrap">
+                    <span className="text-3xl">{medals[i]}</span>
+                    {tied && <span className="text-xs text-gray-400 font-medium">({group.players.length}× gleichauf)</span>}
                   </div>
-                  <div className="text-xs text-gray-400 mt-0.5">Winrate</div>
+                  <div className="text-right">
+                    <div className={`text-3xl font-black ${rep.winrate > 50 ? 'text-green-400' : rep.winrate === 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                      {rep.winrate}%
+                    </div>
+                    <div className="text-xs text-gray-400 mt-0.5">Winrate</div>
+                  </div>
+                </div>
+                <div className="space-y-1 mb-2">
+                  {group.players.map(player => (
+                    <button key={player.name} onClick={() => handlePlayerClick(player.name)}
+                      className={`block font-bold text-base hover:text-yellow-200 transition-colors ${i === 0 ? 'text-yellow-200' : 'text-white'}`}>
+                      👤 {player.name}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-green-400 font-semibold">{rep.wins}S</span>
+                  <span className="text-xs text-gray-500">/</span>
+                  <span className="text-xs text-red-400 font-semibold">{rep.total - rep.wins}N</span>
+                  <span className="text-xs text-gray-500 ml-1">({rep.total} Sp.)</span>
+                </div>
+                <div className="w-full bg-gray-700 rounded-full h-1.5 mt-3">
+                  <div className="h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" style={{ width: `${rep.winrate}%` }} />
                 </div>
               </div>
-              <div className={`font-bold text-lg mb-1 ${i === 0 ? 'text-yellow-200' : 'text-white'}`}>👤 {player.name}</div>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-xs text-green-400 font-semibold">{player.wins}S</span>
-                <span className="text-xs text-gray-500">/</span>
-                <span className="text-xs text-red-400 font-semibold">{player.total - player.wins}N</span>
-                <span className="text-xs text-gray-500 ml-1">({player.total} Sp.)</span>
-              </div>
-              {extra && <div className="text-xs text-gray-500 mt-1">{extra}</div>}
-              <div className="w-full bg-gray-700 rounded-full h-1.5 mt-3">
-                <div className="h-1.5 rounded-full bg-gradient-to-r from-purple-500 to-pink-500" style={{ width: `${player.winrate}%` }} />
-              </div>
-            </div>
-          );
+            );
+          };
 
           return (
             <div>
@@ -2320,17 +2589,17 @@ const BotCStatsTracker = () => {
                 </div>
               </div>
 
-              {hofView === 'scripts' && hofData.map(({ script, label, top3 }) => (
+              {hofView === 'scripts' && hofData.map(({ script, label, podium }) => (
                 <div key={script} className={`mb-8 rounded-xl border ${script === '__all__' ? 'border-yellow-600 bg-gradient-to-br from-yellow-950 via-gray-900 to-gray-900' : 'border-gray-700 bg-gray-800'} overflow-hidden`}>
                   <div className={`px-6 py-4 flex items-center gap-3 ${script === '__all__' ? 'border-b border-yellow-700' : 'border-b border-gray-700'}`}>
                     {script === '__all__' ? <Crown size={22} className="text-yellow-400" /> : <Scroll size={20} className="text-purple-400" />}
                     <h2 className={`text-xl font-bold ${script === '__all__' ? 'text-yellow-400' : 'text-white'}`}>{label}</h2>
-                    {top3.length === 0 && <span className="ml-auto text-sm text-gray-500">Noch keine {hofMinGames}+ Qualifizierer</span>}
+                    {podium.length === 0 && <span className="ml-auto text-sm text-gray-500">Noch keine {hofMinGames}+ Qualifizierer</span>}
                   </div>
-                  {top3.length > 0 && (
+                  {podium.length > 0 && (
                     <div className="p-6">
                       <div className="flex flex-col md:flex-row gap-4">
-                        {top3.map((player, i) => <PodiumCard key={player.name} player={player} i={i} />)}
+                        {podium.map((group, i) => <PodiumGroup key={i} group={group} i={i} />)}
                       </div>
                     </div>
                   )}
@@ -2339,17 +2608,17 @@ const BotCStatsTracker = () => {
 
               {hofView === 'categories' && (
                 <div>
-                  {hofCatData.filter(({ catKey, top3 }) => catKey !== 'Sonstige' || top3.length > 0).map(({ catKey, label, emoji, color, top3 }) => (
+                  {hofCatData.filter(({ catKey, podium }) => catKey !== 'Sonstige' || podium.length > 0).map(({ catKey, label, emoji, color, podium }) => (
                     <div key={catKey} className="mb-8 rounded-xl border border-gray-700 bg-gray-800 overflow-hidden">
                       <div className="px-6 py-4 flex items-center gap-3 border-b border-gray-700" style={{borderLeftColor: color, borderLeftWidth: 4}}>
                         <span className="text-2xl">{emoji}</span>
                         <h2 className="text-xl font-bold text-white">{label}</h2>
-                        {top3.length === 0 && <span className="ml-auto text-sm text-gray-500">Noch keine {hofMinGames}+ Qualifizierer</span>}
+                        {podium.length === 0 && <span className="ml-auto text-sm text-gray-500">Noch keine {hofMinGames}+ Qualifizierer</span>}
                       </div>
-                      {top3.length > 0 && (
+                      {podium.length > 0 && (
                         <div className="p-6">
                           <div className="flex flex-col md:flex-row gap-4">
-                            {top3.map((player, i) => <PodiumCard key={player.name} player={player} i={i} />)}
+                            {podium.map((group, i) => <PodiumGroup key={i} group={group} i={i} />)}
                           </div>
                         </div>
                       )}
@@ -2371,14 +2640,23 @@ const BotCStatsTracker = () => {
                   className="w-full bg-gray-800 border border-gray-700 rounded-lg pl-12 pr-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:ring-opacity-50"
                   value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
               </div>
-              <div className="mt-3 flex gap-2 flex-wrap">
-                {(searchQuery ? filteredPlayers : availablePlayers).slice(0, 10).map(player => (
+              <div className="mt-3 flex gap-2 flex-wrap items-center">
+                <div className="flex gap-1 mr-2">
+                  {[1, 5, 10, 20].map(n => (
+                    <button key={n} onClick={() => setPlayerMinGames(n)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${playerMinGames === n ? 'bg-purple-600 text-white' : 'bg-gray-700 text-gray-400 hover:bg-gray-600'}`}>
+                      {n}+
+                    </button>
+                  ))}
+                  <span className="text-xs text-gray-500 self-center ml-1">Spiele</span>
+                </div>
+                {filteredPlayers.slice(0, 20).map(player => (
                   <button key={player.id} onClick={() => handlePlayerClick(player.name)}
                     className={`px-3 py-1.5 rounded-lg text-sm transition-all ${selectedPlayer?.name === player.name ? 'bg-purple-600 text-white shadow-lg' : 'bg-gray-800 hover:bg-gray-700'}`}>
                     {player.avatar} {player.name}
                   </button>
                 ))}
-                {searchQuery && filteredPlayers.length > 10 && <span className="px-3 py-1.5 text-sm text-gray-400">+{filteredPlayers.length - 10} weitere...</span>}
+                {filteredPlayers.length > 20 && <span className="px-3 py-1.5 text-sm text-gray-400">+{filteredPlayers.length - 20} weitere...</span>}
               </div>
             </div>
 
@@ -2408,9 +2686,22 @@ const BotCStatsTracker = () => {
                 <div className="bg-gradient-to-r from-purple-800 to-pink-800 rounded-lg p-6 mb-6 shadow-xl">
                   <div className="flex items-center gap-4">
                     <div className="text-6xl">{selectedPlayer.avatar}</div>
-                    <div>
+                    <div className="flex-1">
                       <h2 className="text-3xl font-bold">{selectedPlayer.name}</h2>
                       <p className="text-purple-200">{playerStats.total} Spiele gespielt • {playerStats.storytellerGames} als Storyteller</p>
+                      {(() => {
+                        const titles = getPlayerTitles(selectedPlayer.name);
+                        return titles.length > 0 ? (
+                          <div className="flex gap-2 flex-wrap mt-2">
+                            {titles.map((t, i) => (
+                              <span key={i} title={t.tip}
+                                className="text-xs bg-white bg-opacity-20 text-white px-2.5 py-1 rounded-full font-medium cursor-help hover:bg-opacity-30 transition-colors">
+                                {t.emoji} {t.text}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null;
+                      })()}
                     </div>
                   </div>
                 </div>
@@ -2820,10 +3111,39 @@ const BotCStatsTracker = () => {
           const uniquePlayers = sessionPlayers.length;
           const scripts = [...new Set(sessionMatches.map(m => m.script))];
 
-          const mvp = [...sessionPlayers].filter(p => p.games >= 2).sort((a,b) => b.winrate - a.winrate || b.wins - a.wins)[0]
-                   || [...sessionPlayers].sort((a,b) => b.winrate - a.winrate || b.wins - a.wins)[0];
-          const pechvogel = [...sessionPlayers].filter(p => p.games >= 2).sort((a,b) => a.winrate - b.winrate || a.wins - b.wins)[0]
-                         || [...sessionPlayers].sort((a,b) => a.winrate - b.winrate)[0];
+          // Rank players with tie-awareness: same winrate+wins+losses = same rank
+          const rankPlayers = (sorted) => {
+            const ranked = [];
+            let rank = 1;
+            for (let i = 0; i < sorted.length; i++) {
+              if (i > 0) {
+                const prev = sorted[i-1], cur = sorted[i];
+                if (cur.winrate !== prev.winrate || cur.wins !== prev.wins || cur.losses !== prev.losses) rank = i + 1;
+              }
+              ranked.push({ ...sorted[i], rank });
+            }
+            return ranked;
+          };
+
+          const sortedPlayers = [...sessionPlayers].sort((a,b) => b.winrate - a.winrate || b.wins - a.wins || a.losses - b.losses);
+          const rankedPlayers = rankPlayers(sortedPlayers);
+
+          // MVP: all players tied for rank 1 (min 2 games, fallback to all)
+          const mvpPool = rankedPlayers.filter(p => p.games >= 2).length > 0
+            ? rankedPlayers.filter(p => p.games >= 2)
+            : rankedPlayers;
+          const mvpRank1 = mvpPool[0]?.rank;
+          const mvps = mvpPool.filter(p => p.rank === mvpRank1);
+
+          // Pechvogel: all tied for last rank (min 2 games, fallback)
+          const sortedAsc = [...sessionPlayers].sort((a,b) => a.winrate - b.winrate || a.wins - b.wins);
+          const rankedAsc = rankPlayers(sortedAsc);
+          const pechPool = rankedAsc.filter(p => p.games >= 2).length > 0
+            ? rankedAsc.filter(p => p.games >= 2)
+            : rankedAsc;
+          const pechRank1 = pechPool[0]?.rank;
+          const pechvogels = pechPool.filter(p => p.rank === pechRank1)
+            .filter(p => !mvps.find(m => m.name === p.name));
 
           const medals = ['🥇','🥈','🥉'];
 
@@ -2970,43 +3290,53 @@ const BotCStatsTracker = () => {
 
               {/* MVP + Pechvogel */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                {mvp && (
+                {mvps.length > 0 && (
                   <div className="bg-yellow-900 bg-opacity-30 border border-yellow-600 rounded-xl p-5">
                     <div className="flex items-center gap-2 mb-3">
                       <Crown size={20} className="text-yellow-400" />
-                      <span className="text-yellow-400 font-bold text-sm uppercase tracking-wide">Session MVP</span>
+                      <span className="text-yellow-400 font-bold text-sm uppercase tracking-wide">Session MVP{mvps.length > 1 ? 's' : ''}</span>
+                      {mvps.length > 1 && <span className="text-xs text-yellow-600 font-medium">({mvps.length} gleichauf)</span>}
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <button onClick={() => handlePlayerClick(mvp.name)} className="text-xl font-bold text-white hover:text-yellow-300 transition-colors">
-                          👤 {mvp.name}
-                        </button>
-                        <div className="text-sm text-gray-400 mt-1">{mvp.wins}S / {mvp.losses}N • {mvp.games} Spiele</div>
+                        <div className="flex flex-wrap gap-2 mb-1">
+                          {mvps.map(p => (
+                            <button key={p.name} onClick={() => handlePlayerClick(p.name)} className="text-lg font-bold text-white hover:text-yellow-300 transition-colors">
+                              👤 {p.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-sm text-gray-400">{mvps[0].wins}S / {mvps[0].losses}N • {mvps[0].games} Spiele</div>
                       </div>
-                      <div className="text-4xl font-black text-yellow-400">{mvp.winrate}%</div>
+                      <div className="text-3xl font-black text-yellow-400">{mvps[0].winrate}%</div>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
-                      <div className="h-2 rounded-full bg-gradient-to-r from-yellow-500 to-amber-400" style={{width:`${mvp.winrate}%`}} />
+                      <div className="h-2 rounded-full bg-gradient-to-r from-yellow-500 to-amber-400" style={{width:`${mvps[0].winrate}%`}} />
                     </div>
                   </div>
                 )}
-                {pechvogel && pechvogel.name !== mvp?.name && (
+                {pechvogels.length > 0 && (
                   <div className="bg-red-900 bg-opacity-20 border border-red-700 rounded-xl p-5">
                     <div className="flex items-center gap-2 mb-3">
                       <Skull size={20} className="text-red-400" />
-                      <span className="text-red-400 font-bold text-sm uppercase tracking-wide">Pechvogel</span>
+                      <span className="text-red-400 font-bold text-sm uppercase tracking-wide">Pechvogel{pechvogels.length > 1 ? 's' : ''}</span>
+                      {pechvogels.length > 1 && <span className="text-xs text-red-700 font-medium">({pechvogels.length} gleichauf)</span>}
                     </div>
                     <div className="flex items-center justify-between">
                       <div>
-                        <button onClick={() => handlePlayerClick(pechvogel.name)} className="text-xl font-bold text-white hover:text-red-300 transition-colors">
-                          👤 {pechvogel.name}
-                        </button>
-                        <div className="text-sm text-gray-400 mt-1">{pechvogel.wins}S / {pechvogel.losses}N • {pechvogel.games} Spiele</div>
+                        <div className="flex flex-wrap gap-2 mb-1">
+                          {pechvogels.map(p => (
+                            <button key={p.name} onClick={() => handlePlayerClick(p.name)} className="text-lg font-bold text-white hover:text-red-300 transition-colors">
+                              👤 {p.name}
+                            </button>
+                          ))}
+                        </div>
+                        <div className="text-sm text-gray-400">{pechvogels[0].wins}S / {pechvogels[0].losses}N • {pechvogels[0].games} Spiele</div>
                       </div>
-                      <div className="text-4xl font-black text-red-400">{pechvogel.winrate}%</div>
+                      <div className="text-3xl font-black text-red-400">{pechvogels[0].winrate}%</div>
                     </div>
                     <div className="w-full bg-gray-700 rounded-full h-2 mt-3">
-                      <div className="h-2 rounded-full bg-red-600" style={{width:`${pechvogel.winrate}%`}} />
+                      <div className="h-2 rounded-full bg-red-600" style={{width:`${pechvogels[0].winrate}%`}} />
                     </div>
                   </div>
                 )}
@@ -3035,14 +3365,19 @@ const BotCStatsTracker = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {sessionPlayers.map((p, idx) => (
+                      {(() => {
+                        // Map rank -> medal position (1st distinct rank = 🥇, 2nd = 🥈, 3rd = 🥉)
+                        const uniqueRanks = [...new Set(rankedPlayers.map(p => p.rank))].sort((a,b) => a-b);
+                        const rankToMedal = {};
+                        uniqueRanks.slice(0, 3).forEach((r, i) => { rankToMedal[r] = medals[i]; });
+                        return rankedPlayers.map((p) => (
                         <tr key={p.name}
                           onClick={() => handlePlayerClick(p.name)}
-                          className={`border-b border-gray-700 cursor-pointer transition-colors hover:bg-cyan-900 hover:bg-opacity-20 ${idx % 2 === 0 ? 'bg-gray-800' : ''}`}>
+                          className={`border-b border-gray-700 cursor-pointer transition-colors hover:bg-cyan-900 hover:bg-opacity-20 ${(p.rank - 1) % 2 === 0 ? 'bg-gray-800' : ''}`}>
                           <td className="py-3 px-3 text-center">
-                            {idx < 3
-                              ? <span className="text-lg">{medals[idx]}</span>
-                              : <span className="text-gray-500 font-mono text-sm">#{idx+1}</span>}
+                            {rankToMedal[p.rank]
+                              ? <span className="text-lg">{rankToMedal[p.rank]}</span>
+                              : <span className="text-gray-500 font-mono text-sm">#{p.rank}</span>}
                           </td>
                           <td className="py-3 px-4">
                             <span className="font-semibold text-white hover:text-cyan-300 transition-colors">👤 {p.name}</span>
@@ -3094,7 +3429,8 @@ const BotCStatsTracker = () => {
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        ));
+                      })()}
                     </tbody>
                   </table>
                 </div>
@@ -3194,6 +3530,220 @@ const BotCStatsTracker = () => {
             </div>
           );
         })()}
+        {/* ======================== ALLE SPIELE PAGE ======================== */}
+        {activePage === 'allmatches' && (() => {
+          const allMatches = getAllMatches();
+          const allPlayers = [...new Set(allMatches.flatMap(m => m.players.map(p => p.name)))].sort();
+          const allRolesAm = [...new Set(allMatches.flatMap(m => m.players.map(p => p.role)))].sort();
+          const allScriptsAm = [...new Set(allMatches.map(m => m.script))].sort();
+          const amSeasons = getAvailableYears();
+
+          const filtered = allMatches.filter(m => {
+            if (amSeason !== 'all' && getMatchSeason(m.date) !== amSeason) return false;
+            if (amScript !== 'all' && m.script !== amScript) return false;
+            if (amPlayer !== 'all' && !m.players.some(p => p.name === amPlayer)) return false;
+            if (amRole && !m.players.some(p => p.role.toLowerCase().includes(amRole.toLowerCase()))) return false;
+            return true;
+          }).sort((a, b) => new Date(b.date) - new Date(a.date) || b.id - a.id);
+
+          const fmtDate = (iso) => { const [y,m,d] = iso.split('-'); return `${d}.${m}.${y}`; };
+
+          return (
+            <div>
+              {/* Script Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                {['all', ...allScriptsAm].map(sc => {
+                  const scMatches = (amSeason === 'all' ? allMatches : allMatches.filter(m => getMatchSeason(m.date) === amSeason))
+                    .filter(m => sc === 'all' || m.script === sc);
+                  if (scMatches.length === 0) return null;
+                  const goodWins = scMatches.filter(m => m.players.some(p => p.team === 'Gut' && p.result === 'Sieg')).length;
+                  const evilWins = scMatches.length - goodWins;
+                  const goodWR = Math.round((goodWins / scMatches.length) * 100);
+                  const evilWR = 100 - goodWR;
+                  return (
+                    <div key={sc} className={`bg-gray-800 rounded-xl border p-4 ${sc === 'all' ? 'border-indigo-600' : 'border-gray-700'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <span className={`font-bold text-sm ${sc === 'all' ? 'text-indigo-400' : 'text-white'}`}>
+                          {sc === 'all' ? '📊 Gesamt' : sc}
+                        </span>
+                        <span className="text-xs text-gray-400 bg-gray-700 px-2 py-0.5 rounded-full">{scMatches.length} Spiele</span>
+                      </div>
+                      <div className="space-y-2">
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-blue-400 font-semibold">💙 Gut</span>
+                            <span className="text-blue-400 font-bold">{goodWR}% <span className="text-gray-500 font-normal">({goodWins}S / {evilWins}N)</span></span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-blue-500 rounded-full" style={{width: `${goodWR}%`}} />
+                          </div>
+                        </div>
+                        <div>
+                          <div className="flex justify-between text-xs mb-1">
+                            <span className="text-red-400 font-semibold">❤️ Böse</span>
+                            <span className="text-red-400 font-bold">{evilWR}% <span className="text-gray-500 font-normal">({evilWins}S / {goodWins}N)</span></span>
+                          </div>
+                          <div className="w-full h-2 bg-gray-700 rounded-full overflow-hidden">
+                            <div className="h-full bg-red-500 rounded-full" style={{width: `${evilWR}%`}} />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Filters */}
+              <div className="bg-gray-800 rounded-lg border border-gray-700 p-5 mb-6">
+                <div className="flex flex-wrap gap-4 items-end">
+                  <div>
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Calendar size={12}/>Season</label>
+                    <div className="flex gap-1 flex-wrap">
+                      <button onClick={() => setAmSeason('all')}
+                        className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${amSeason === 'all' ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                        Alle
+                      </button>
+                      {amSeasons.map(s => (
+                        <button key={s} onClick={() => setAmSeason(s)}
+                          className={`px-3 py-2 rounded-lg text-sm font-medium transition-colors ${amSeason === s ? 'bg-indigo-600 text-white' : 'bg-gray-700 text-gray-300 hover:bg-gray-600'}`}>
+                          Season {s}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Scroll size={12}/>Script</label>
+                    <select value={amScript} onChange={e => setAmScript(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                      <option value="all">Alle Scripts</option>
+                      {allScriptsAm.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><User size={12}/>Spieler</label>
+                    <select value={amPlayer} onChange={e => setAmPlayer(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-indigo-500">
+                      <option value="all">Alle Spieler</option>
+                      {allPlayers.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex-1 min-w-[160px]">
+                    <label className="block text-xs text-gray-400 mb-1.5 font-medium flex items-center gap-1"><Search size={12}/>Rolle</label>
+                    <input type="text" placeholder="z.B. Imp, Washer..." value={amRole}
+                      onChange={e => setAmRole(e.target.value)}
+                      className="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-indigo-500" />
+                  </div>
+                  {(amSeason !== 'all' || amScript !== 'all' || amPlayer !== 'all' || amRole) && (
+                    <button onClick={() => { setAmSeason('all'); setAmScript('all'); setAmPlayer('all'); setAmRole(''); }}
+                      className="px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm text-gray-300 transition-colors flex items-center gap-1">
+                      <X size={14}/>Reset
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mt-3">{filtered.length} von {allMatches.length} Spielen</p>
+              </div>
+
+              {/* Match list */}
+              <div className="space-y-3">
+                {filtered.map(match => {
+                  const isExpanded = amExpanded === match.id;
+                  const goodPlayers = match.players.filter(p => p.team === 'Gut');
+                  const goodWins = goodPlayers.filter(p => p.result === 'Sieg').length > 0;
+                  const winner = goodWins ? 'Gut' : 'Böse';
+                  const highlightPlayer = amPlayer !== 'all' ? match.players.find(p => p.name === amPlayer) : null;
+                  const highlightRole = amRole ? match.players.filter(p => p.role.toLowerCase().includes(amRole.toLowerCase())) : [];
+
+                  return (
+                    <div key={match.id} className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
+                      <button className="w-full text-left px-5 py-4 flex items-center gap-4 hover:bg-gray-750 transition-colors"
+                        onClick={() => setAmExpanded(isExpanded ? null : match.id)}>
+                        <div className="text-gray-500 font-mono text-sm w-8 flex-shrink-0">#{match.id}</div>
+                        <div className="text-gray-400 text-sm w-24 flex-shrink-0">{fmtDate(match.date)}</div>
+                        <div className="flex-1">
+                          <span className="text-white font-semibold">{match.script}</span>
+                          <span className="text-gray-500 text-sm ml-2">• {match.players.length} Spieler</span>
+                        </div>
+                        <div className={`px-3 py-1 rounded-full text-xs font-bold flex-shrink-0 ${winner === 'Gut' ? 'bg-blue-900 text-blue-300' : 'bg-red-900 text-red-300'}`}>
+                          {winner === 'Gut' ? '💙 Gut gewinnt' : '❤️ Böse gewinnt'}
+                        </div>
+                        {highlightPlayer && (
+                          <div className="flex-shrink-0 text-sm">
+                            <span className="text-gray-400">{highlightPlayer.name}: </span>
+                            <span className="text-indigo-300 font-semibold">{highlightPlayer.role}</span>
+                            <span className={`ml-1 text-xs ${highlightPlayer.result === 'Sieg' ? 'text-green-400' : 'text-red-400'}`}>
+                              {highlightPlayer.result === 'Sieg' ? '✓' : '✗'}
+                            </span>
+                          </div>
+                        )}
+                        {highlightRole.length > 0 && !highlightPlayer && (
+                          <div className="flex-shrink-0 flex gap-1 flex-wrap max-w-[200px]">
+                            {highlightRole.map(p => {
+                              const cfg = CATEGORY_DISPLAY[getRoleCategory(p.role)] || CATEGORY_DISPLAY.Sonstige;
+                              return (
+                                <span key={p.name} className="text-xs px-2 py-0.5 rounded-full font-medium"
+                                  style={{ backgroundColor: cfg.color + '22', color: cfg.color }}>
+                                  {p.name}: {p.role}
+                                </span>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <span className="text-gray-600 flex-shrink-0">{isExpanded ? '▲' : '▼'}</span>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="border-t border-gray-700 px-5 py-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            {['Gut','Böse'].map(team => (
+                              <div key={team}>
+                                <div className={`text-xs font-bold uppercase tracking-wide mb-2 ${team === 'Gut' ? 'text-blue-400' : 'text-red-400'}`}>
+                                  {team === 'Gut' ? '💙' : '❤️'} Team {team}
+                                </div>
+                                <div className="space-y-1.5">
+                                  {match.players.filter(p => p.team === team).map(p => {
+                                    const catKey = getRoleCategory(p.role);
+                                    const cfg = CATEGORY_DISPLAY[catKey] || CATEGORY_DISPLAY.Sonstige;
+                                    const isHighlight = (amPlayer !== 'all' && p.name === amPlayer) ||
+                                      (amRole && p.role.toLowerCase().includes(amRole.toLowerCase()));
+                                    return (
+                                      <div key={p.name}
+                                        className={`flex items-center justify-between rounded-lg px-3 py-2 ${isHighlight ? 'bg-indigo-900 bg-opacity-40 ring-1 ring-indigo-500' : 'bg-gray-900'}`}>
+                                        <button onClick={() => handlePlayerClick(p.name)}
+                                          className="text-sm font-semibold text-white hover:text-indigo-300 transition-colors">
+                                          👤 {p.name}
+                                        </button>
+                                        <span className="text-xs px-2 py-0.5 rounded-full font-medium ml-2"
+                                          style={{ backgroundColor: cfg.color + '22', color: cfg.color }}>
+                                          {cfg.emoji} {p.role}
+                                        </span>
+                                        <span className={`text-xs font-bold ml-2 ${p.result === 'Sieg' ? 'text-green-400' : 'text-red-400'}`}>
+                                          {p.result === 'Sieg' ? '✓' : '✗'}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                {filtered.length === 0 && (
+                  <div className="text-center py-16 text-gray-500">
+                    <Scroll size={40} className="mx-auto mb-3 opacity-30" />
+                    <p className="text-lg">Keine Spiele gefunden</p>
+                    <p className="text-sm mt-1">Passe die Filter an</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+
       </div>
     </div>
   );
