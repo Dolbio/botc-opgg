@@ -516,7 +516,7 @@ const BotCStatsTracker = () => {
     const evilRatio = total > 0 ? evilPlayed.length / total : 0;
     const goodRatio = total > 0 ? goodPlayed.length / total : 0;
 
-    if (evilRatio >= 0.2 && total >= 5) {
+    if (evilRatio >= 0.25 && total >= 5) {
       titles.push({ emoji: '😈', text: 'Böse bis ins Blut', tip: `${Math.round(evilRatio*100)}% der Spiele auf Team Böse` });
     } else if (goodRatio >= 0.8 && total >= 5) {
       titles.push({ emoji: '😇', text: 'Reinste Seele', tip: `${Math.round(goodRatio*100)}% der Spiele auf Team Gut` });
@@ -639,13 +639,13 @@ const BotCStatsTracker = () => {
     }
 
     // ── FUN/RARE ──
-    if (Object.keys(roleCounts).length >= 10 && total >= 10) {
+    if (Object.keys(roleCounts).length >= 20 && total >= 10) {
       titles.push({ emoji: '🎲', text: 'Tausendsassa', tip: `${Object.keys(roleCounts).length} verschiedene Rollen gespielt` });
     }
     const neverEvil = evilPlayed.length === 0 && total >= 5;
     if (neverEvil) titles.push({ emoji: '✝️', text: 'Heiliger', tip: 'Noch nie böse gespielt' });
 
-    return titles.slice(0, 5); // max 5 titles per player
+    return titles;
   };
 
   const getAvailableYears = () => {
@@ -3814,7 +3814,7 @@ const BotCStatsTracker = () => {
                 { emoji: '🎭', name: '[Rolle]-Stammgast', desc: 'Meiste Spiele mit einer bestimmten Rolle — niemand anderes hat diese Rolle öfter gespielt (min. 3 Spiele).' },
                 { emoji: '🌟', name: '[Rolle]-Legende', desc: '100% Winrate mit einer Rolle bei mindestens 3 Spielen.' },
                 { emoji: '💀', name: '[Rolle]-Fluch', desc: '0% Winrate mit einer Rolle bei mindestens 3 Spielen.' },
-                { emoji: '🎲', name: 'Tausendsassa', desc: 'Hat mindestens 10 verschiedene Rollen gespielt (und insgesamt 10+ Spiele).' },
+                { emoji: '🎲', name: 'Tausendsassa', desc: 'Hat mindestens 20 verschiedene Rollen gespielt (und insgesamt 10+ Spiele).' },
               ]
             },
             {
@@ -3866,7 +3866,7 @@ const BotCStatsTracker = () => {
               color: 'border-yellow-500',
               titles: [
                 { emoji: '😇', name: 'Reinste Seele', desc: 'Mindestens 80% der Spiele auf Team Gut gespielt (min. 5 Spiele).' },
-                { emoji: '😈', name: 'Böse bis ins Blut', desc: 'Mindestens 20% der Spiele auf Team Böse gespielt (min. 5 Spiele).' },
+                { emoji: '😈', name: 'Böse bis ins Blut', desc: 'Mindestens 25% der Spiele auf Team Böse gespielt (min. 5 Spiele).' },
                 { emoji: '✝️', name: 'Heiliger', desc: 'Noch nie auf Team Böse gespielt (min. 5 Spiele).' },
                 { emoji: '🗡️', name: 'Böse Machiavellist', desc: '60%+ Winrate auf Team Böse bei mindestens 5 Spielen.' },
                 { emoji: '🛡️', name: 'Schutzengel', desc: '60%+ Winrate auf Team Gut bei mindestens 5 Spielen.' },
